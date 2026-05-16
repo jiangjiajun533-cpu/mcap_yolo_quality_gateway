@@ -1,0 +1,40 @@
+services:
+  mcap_yolo_gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcap_yolo_gateway
+    ports:
+      - "8088:8000"
+    volumes:
+      - ./test_data:/workspace/test_data
+      - ./models:/workspace/models
+      - ./outputs:/workspace/outputs
+    command: >
+      bash -lc "
+      uvicorn app.main:app --host 0.0.0.0 --port 8000
+      "
+
+  mcap_smoke_test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcap_smoke_test
+    profiles:
+      - test
+    volumes:
+      - ./test_data:/workspace/test_data
+      - ./models:/workspace/models
+      - ./outputs:/workspace/outputs
+    command: >
+      bash -lc "
+      python scripts/run_mcap_yolo_inference.py
+      --mcap /workspace/test_data/sample.mcap
+      --auto-detect-topics true
+      --model /workspace/models/yolov8n.onnx
+      --labels /workspace/models/coco_classes.txt
+      --target-classes person,car,truck,bus
+      --sample-every-n 5
+      --quality-threshold 0.6
+      --output-dir /workspace/outputs/smoke_test
+      "

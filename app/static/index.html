@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoboVision QA — Pipeline Frame Reviewer</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0e1117;--card:#1a1d23;--border:#30363d;--accent:#00d4ff;
+  --text:#e6edf3;--dim:#8b949e;--red:#f85149;--green:#3fb950;--yellow:#d29922;
+  --topbar-h:44px;--sidebar-w:280px;--right-w:340px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+  font-family:"Segoe UI",system-ui,-apple-system,sans-serif;font-size:13px;line-height:1.5}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+button{cursor:pointer;border:none;background:none;color:var(--text);font:inherit}
+input,select{font:inherit;color:var(--text);background:var(--card);border:1px solid var(--border);border-radius:4px;padding:3px 8px}
+
+#app{display:grid;grid-template-columns:var(--sidebar-w) 1fr var(--right-w);
+  grid-template-rows:var(--topbar-h) 1fr;height:100vh;width:100vw}
+
+/* ── Top Bar ── */
+#topbar{grid-column:1/-1;grid-row:1;background:#12151a;display:flex;align-items:center;
+  padding:0 16px;gap:12px;border-bottom:1px solid var(--border)}
+.brand{font-weight:700;color:var(--accent);font-size:15px;white-space:nowrap}
+.bar-group{display:flex;align-items:center;gap:6px}
+.bar-group label{font-size:11px;color:var(--dim);white-space:nowrap}
+.bar-group input{height:26px;font-size:12px}
+.bar-group button{height:26px;padding:0 12px;border-radius:4px;font-size:11px;font-weight:600}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{opacity:.85}
+.bar-group input.wide{width:280px}
+.bar-group input.med{width:180px}
+.spacer{flex:1}
+.status{font-size:11px;color:var(--dim)}
+.status b{color:var(--green)}
+
+/* ── Sidebar ── */
+#sidebar{grid-column:1;grid-row:2;background:var(--card);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden}
+.sb-section{padding:10px 12px;border-bottom:1px solid var(--border)}
+.sb-section h3{font-size:10px;text-transform:uppercase;color:var(--dim);letter-spacing:.8px;margin-bottom:6px;font-weight:600}
+
+/* camera list */
+.cam-list{list-style:none}
+.cam-item{padding:6px 8px;margin-bottom:2px;border-radius:4px;cursor:pointer;font-size:12px;
+  display:flex;justify-content:space-between;align-items:center;border-left:3px solid transparent}
+.cam-item:hover{background:rgba(255,255,255,.04)}
+.cam-item.active{border-left-color:var(--accent);background:rgba(0,212,255,.08)}
+.cam-name{font-weight:600}
+.cam-stats{font-size:10px;color:var(--dim)}
+.cam-stats .bad{color:var(--red)}
+.cam-stats .det{color:var(--green)}
+
+/* filter tabs */
+.filter-tabs{display:flex;gap:2px;margin-bottom:6px}
+.filter-tab{flex:1;text-align:center;padding:4px 0;font-size:11px;border-radius:3px;
+  background:var(--bg);border:1px solid var(--border);font-weight:500}
+.filter-tab.active{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
+.filter-tab .count{font-size:10px;opacity:.8}
+
+/* frame list */
+.frame-list-wrap{flex:1;overflow-y:auto;min-height:0}
+.frame-list{list-style:none;padding:0 12px 12px}
+.frame-item{padding:5px 8px;margin-bottom:1px;border-radius:3px;cursor:pointer;font-size:11px;
+  display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}
+.frame-item:hover{background:rgba(255,255,255,.05)}
+.frame-item.active{background:rgba(0,212,255,.12)}
+.frame-item.bad{border-left:2px solid var(--red)}
+.frame-item.det{border-left:2px solid var(--green)}
+.frame-item.normal{border-left:2px solid transparent}
+.fi-seq{width:36px;text-align:right;color:var(--dim);font-weight:600}
+.fi-score{width:36px;text-align:right}
+.fi-tags{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim);font-size:10px}
+.fi-obj{font-size:10px;color:var(--green)}
+
+/* links */
+.report-links{padding:10px 12px;border-top:1px solid var(--border);margin-top:auto}
+.report-links h3{font-size:10px;text-transform:uppercase;color:var(--dim);letter-spacing:.8px;margin-bottom:6px}
+.report-links a{display:block;font-size:12px;padding:3px 0}
+
+/* ── Center ── */
+#center{grid-column:2;grid-row:2;display:flex;flex-direction:column;overflow:hidden;background:#000}
+.center-toolbar{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--card);
+  border-bottom:1px solid var(--border);flex-shrink:0}
+.center-toolbar button{padding:3px 10px;border-radius:4px;font-size:12px;border:1px solid var(--border)}
+.center-toolbar button:hover{background:rgba(255,255,255,.08)}
+.center-toolbar button.on{border-color:var(--accent);color:var(--accent);font-weight:600}
+.nav-group{display:flex;align-items:center;gap:4px}
+.nav-group input{width:50px;text-align:center;height:24px;font-size:12px}
+.nav-group .of{color:var(--dim);font-size:11px}
+.center-toolbar .spacer{flex:1}
+.center-label{font-size:11px;color:var(--dim)}
+
+#imageWrap{flex:1;display:flex;align-items:center;justify-content:center;position:relative;
+  overflow:hidden;min-height:0}
+#frameImg{max-width:100%;max-height:100%;object-fit:contain}
+#imgSpinner{position:absolute;width:24px;height:24px;border:3px solid var(--border);
+  border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+#noFrame{color:var(--dim);font-size:14px;display:none}
+
+/* ── Right Panel ── */
+#rightPanel{grid-column:3;grid-row:2;background:var(--card);border-left:1px solid var(--border);
+  overflow-y:auto;padding:0}
+.rp-section{padding:10px 14px;border-bottom:1px solid var(--border)}
+.rp-section h3{font-size:10px;text-transform:uppercase;color:var(--dim);letter-spacing:.8px;margin-bottom:6px;font-weight:600}
+.field-table{width:100%;border-collapse:collapse}
+.field-table tr{border-bottom:1px solid rgba(48,54,61,.5)}
+.field-table td{padding:3px 0;font-size:12px;vertical-align:top}
+.field-table .fk{color:var(--dim);width:120px;padding-right:8px}
+.field-table .fv{color:var(--text);word-break:break-all}
+.fv.bad{color:var(--red)}
+.fv.good{color:var(--green)}
+.fv.warn{color:var(--yellow)}
+
+.obj-card{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:6px 8px;margin-bottom:4px}
+.obj-card .obj-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
+.obj-card .obj-label{font-weight:700;font-size:12px}
+.obj-card .obj-conf{font-size:11px}
+.obj-card .obj-bbox{font-size:10px;color:var(--dim)}
+
+/* ── Empty state ── */
+#emptyState{grid-column:1/-1;grid-row:2;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:12px;color:var(--dim);text-align:center;padding:40px}
+#emptyState h2{color:var(--text);font-size:20px;font-weight:500}
+#emptyState p{max-width:500px;font-size:13px;line-height:1.6}
+
+/* toast */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:8px 20px;
+  border-radius:6px;background:#333;color:#fff;font-size:12px;opacity:0;transition:opacity .3s;z-index:999;pointer-events:none}
+#toast.show{opacity:1}
+#toast.error{background:var(--red)}
+#toast.success{background:var(--green);color:#000}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Top Bar -->
+  <header id="topbar">
+    <span class="brand">RoboVision QA</span>
+    <div class="bar-group">
+      <label>MCAP:</label>
+      <input id="mcapInput" class="wide" type="text" placeholder="server path to .mcap file" spellcheck="false">
+      <button class="btn-primary" onclick="loadMcap()">Load</button>
+    </div>
+    <div class="bar-group">
+      <label>Results:</label>
+      <input id="outputInput" class="med" type="text" value="outputs/yolo_test_v2" spellcheck="false">
+      <button class="btn-primary" onclick="loadResults()">Load Results</button>
+    </div>
+    <div class="spacer"></div>
+    <span class="status" id="statusBar">No data loaded</span>
+  </header>
+
+  <!-- Empty state (before load) -->
+  <div id="emptyState">
+    <h2>Pipeline Frame Reviewer</h2>
+    <p>1. Enter the MCAP file path and click <b>Load</b> to discover cameras.<br>
+       2. Enter the pipeline output directory and click <b>Load Results</b> to browse all processed frames.<br>
+       3. Click any frame to view its image and field data.</p>
+  </div>
+
+  <!-- Sidebar (hidden until loaded) -->
+  <aside id="sidebar" style="display:none">
+    <div class="sb-section">
+      <h3>Cameras</h3>
+      <ul class="cam-list" id="camList"></ul>
+    </div>
+    <div class="sb-section">
+      <h3>Frames</h3>
+      <div class="filter-tabs" id="filterTabs">
+        <button class="filter-tab active" data-f="all" onclick="setFilter('all')">All <span class="count" id="cntAll">0</span></button>
+        <button class="filter-tab" data-f="bad" onclick="setFilter('bad')">Bad <span class="count" id="cntBad">0</span></button>
+        <button class="filter-tab" data-f="det" onclick="setFilter('det')">Detect <span class="count" id="cntDet">0</span></button>
+      </div>
+    </div>
+    <div class="frame-list-wrap">
+      <ul class="frame-list" id="frameList"></ul>
+    </div>
+    <div class="report-links" id="reportLinks">
+      <h3>Reports</h3>
+      <a id="linkQuality" href="#" target="_blank">Quality Report (HTML)</a>
+      <a id="linkYolo" href="#" target="_blank">YOLO Report (HTML)</a>
+      <a id="linkMetrics" href="#" target="_blank">metrics.json</a>
+    </div>
+  </aside>
+
+  <!-- Center -->
+  <main id="center" style="display:none">
+    <div class="center-toolbar">
+      <button id="yoloBtn" onclick="toggleYolo()" title="Draw boxes from pipeline results (or live YOLO if none)">Show Boxes</button>
+      <div class="spacer"></div>
+      <div class="nav-group">
+        <button onclick="navFrame(-1)" title="Previous frame">&larr; Prev</button>
+        <input id="seqInput" type="number" min="0" value="0" onchange="jumpToSeq(this.value)">
+        <span class="of">/ <span id="totalLabel">0</span></span>
+        <button onclick="navFrame(1)" title="Next frame">Next &rarr;</button>
+      </div>
+      <div class="spacer"></div>
+      <span class="center-label" id="camLabel">—</span>
+    </div>
+    <div id="imageWrap">
+      <div id="imgSpinner"></div>
+      <img id="frameImg" alt="Frame">
+      <div id="noFrame">Select a frame from the list</div>
+    </div>
+  </main>
+
+  <!-- Right Panel -->
+  <aside id="rightPanel" style="display:none">
+    <div class="rp-section">
+      <h3>Frame Fields</h3>
+      <table class="field-table" id="fieldTable"><tbody></tbody></table>
+    </div>
+    <div class="rp-section" id="objectsSection" style="display:none">
+      <h3>Detected Objects</h3>
+      <div id="objectsList"></div>
+    </div>
+    <div class="rp-section" id="latencySection" style="display:none">
+      <h3>Latency (ms)</h3>
+      <table class="field-table" id="latencyTable"><tbody></tbody></table>
+    </div>
+  </aside>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const S = {
+  mcapPath: '',
+  outputDir: '',
+  cameras: [],
+  cameraMeta: {},
+  activeCam: '',
+  predictions: [],
+  camFrames: [],
+  filteredFrames: [],
+  filter: 'all',
+  activeIdx: -1,
+  showYolo: false,
+  imgBlobUrl: null,
+};
+
+const $ = id => document.getElementById(id);
+const enc = s => encodeURIComponent(s);
+
+/** Left sidebar metrics.json — static file under /outputs/... */
+function metricsLinkUrl(outputDir) {
+  const d = (outputDir || '').replace(/\\/g, '/').replace(/^\.\//, '');
+  if (d.startsWith('outputs/')) return '/' + d + '/metrics.json';
+  return '/report/metrics?output_dir=' + enc(d);
+}
+
+function toast(msg, type) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = type ? 'show ' + type : 'show';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = '', 3000);
+}
+
+function camLabel(topic) {
+  const isDepth = topic.includes('depth') || topic.includes('disparity');
+  if (topic.includes('realsense_head')) return isDepth ? 'Head · Depth' : 'Head · RGB';
+  if (topic.includes('realsense_up')) return isDepth ? 'Up · Depth' : 'Up · RGB';
+  if (topic.includes('right_wrist')) return 'Right Wrist';
+  if (topic.includes('left_wrist')) return 'Left Wrist';
+  const parts = topic.split('/').filter(Boolean);
+  return parts.slice(-2).join('/');
+}
+
+function showUI() {
+  $('emptyState').style.display = 'none';
+  $('sidebar').style.display = 'flex';
+  $('center').style.display = 'flex';
+  $('rightPanel').style.display = 'block';
+}
+
+/** Try common server paths from pipeline mcap_file (e.g. sample.mcap → test_data/sample.mcap). */
+async function ensureMcapPath() {
+  if (S.mcapPath) return true;
+  const preds = S.predictions || [];
+  if (!preds.length) return false;
+  const name = (preds.find(p => p.mcap_file) || {}).mcap_file || '';
+  if (!name) return false;
+  const candidates = ['test_data/' + name, name, '../' + name];
+  for (const path of candidates) {
+    try {
+      const r = await fetch('/mcap/inspect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mcap_path: path }),
+      });
+      if (!r.ok) continue;
+      S.mcapPath = path;
+      $('mcapInput').value = path;
+      return true;
+    } catch { /* try next */ }
+  }
+  return false;
+}
+
+/* ── Load MCAP ── */
+async function loadMcap() {
+  const path = $('mcapInput').value.trim();
+  if (!path) { toast('Enter MCAP path'); return; }
+  S.mcapPath = path;
+  try {
+    const r = await fetch('/mcap/inspect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mcap_path: path}),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || r.status);
+    const d = await r.json();
+    S.cameras = [];
+    S.cameraMeta = {};
+    (d.topics || []).forEach(t => {
+      const name = typeof t === 'string' ? t : t.topic;
+      if (!name) return;
+      if (typeof t === 'object' && t.is_image_topic === false) return;
+      S.cameras.push(name);
+      S.cameraMeta[name] = t;
+    });
+    $('statusBar').innerHTML = '<b>' + (d.mcap_file || path.split(/[\\/]/).pop()) +
+      '</b> · ' + S.cameras.length + ' cameras · ' + (d.duration_sec ? d.duration_sec.toFixed(1) + 's' : '');
+    renderCameras();
+    toast('MCAP loaded: ' + S.cameras.length + ' cameras', 'success');
+  } catch (e) {
+    toast('Load failed: ' + e.message, 'error');
+  }
+}
+
+/* ── Load Pipeline Results ── */
+async function loadResults() {
+  const dir = $('outputInput').value.trim();
+  if (!dir) { toast('Enter output directory'); return; }
+  S.outputDir = dir;
+  try {
+    const r = await fetch('/pipeline/review_index?output_dir=' + enc(dir));
+    if (!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || r.status);
+    const data = await r.json();
+
+    // Load full predictions
+    S.predictions = data.predictions || [];
+
+    // Discover cameras from predictions if not already loaded
+    if (S.cameras.length === 0) {
+      const topicSet = new Set();
+      S.predictions.forEach(p => topicSet.add(p.topic));
+      S.cameras = Array.from(topicSet).sort();
+    }
+
+    if (data.report_urls) {
+      $('linkQuality').href = data.report_urls.quality_html;
+      $('linkYolo').href = data.report_urls.yolo_html;
+    }
+    $('linkMetrics').href = metricsLinkUrl(dir);
+
+    showUI();
+    renderCameras();
+
+    await ensureMcapPath();
+
+    // Auto-select first camera
+    if (S.cameras.length > 0 && !S.activeCam) {
+      selectCamera(S.cameras[0]);
+    } else if (S.activeIdx >= 0 && S.mcapPath) {
+      loadImage(S.filteredFrames[S.activeIdx]);
+    }
+
+    const totalBad = S.predictions.filter(p => isBad(p)).length;
+    const totalDet = S.predictions.filter(p => hasDet(p)).length;
+    $('statusBar').innerHTML = '<b>' + S.predictions.length + ' frames</b> loaded · ' +
+      '<span style="color:var(--red)">' + totalBad + ' bad</span> · ' +
+      '<span style="color:var(--green)">' + totalDet + ' with detections</span>';
+    toast('Results loaded: ' + S.predictions.length + ' frames', 'success');
+  } catch (e) {
+    toast('Load results failed: ' + e.message, 'error');
+  }
+}
+
+function isBad(p) {
+  if (p.reason && (p.reason.includes('depth') || p.reason.includes('disparity'))) return false;
+  return p.is_bad_quality === true ||
+    (p.quality_score !== undefined && p.quality_score < 0.6 && p.action === 'skip_inference');
+}
+function isSkippedDepth(p) {
+  return p.reason && (p.reason.includes('depth') || p.reason.includes('disparity'));
+}
+function hasDet(p) {
+  return p.objects && p.objects.length > 0;
+}
+
+/* ── Cameras ── */
+function renderCameras() {
+  const ul = $('camList');
+  ul.innerHTML = '';
+  S.cameras.forEach(topic => {
+    const li = document.createElement('li');
+    li.className = 'cam-item' + (topic === S.activeCam ? ' active' : '');
+    const frames = S.predictions.filter(p => p.topic === topic);
+    const bad = frames.filter(isBad).length;
+    const det = frames.filter(hasDet).length;
+    const depth = frames.filter(isSkippedDepth).length;
+    let statsHtml = frames.length + '';
+    if (bad) statsHtml += ' · <span class="bad">' + bad + ' bad</span>';
+    if (det) statsHtml += ' · <span class="det">' + det + ' det</span>';
+    if (depth === frames.length) statsHtml += ' · <span style="color:var(--dim)">depth</span>';
+    li.innerHTML = '<span class="cam-name">' + esc(camLabel(topic)) + '</span>' +
+      '<span class="cam-stats">' + statsHtml + '</span>';
+    li.title = topic;
+    li.onclick = () => selectCamera(topic);
+    ul.appendChild(li);
+  });
+}
+
+function selectCamera(topic) {
+  S.activeCam = topic;
+  S.camFrames = S.predictions.filter(p => p.topic === topic);
+  S.camFrames.sort((a, b) => a.frame_seq - b.frame_seq);
+  S.activeIdx = -1;
+  $('camLabel').textContent = camLabel(topic);
+  renderCameras();
+  applyFilter();
+  if (S.filteredFrames.length > 0) {
+    selectFrame(0);
+  } else {
+    clearFrame();
+  }
+}
+
+/* ── Filter ── */
+function setFilter(f) {
+  S.filter = f;
+  document.querySelectorAll('.filter-tab').forEach(b => b.classList.toggle('active', b.dataset.f === f));
+  applyFilter();
+  if (S.filteredFrames.length > 0) selectFrame(0);
+  else clearFrame();
+}
+
+function applyFilter() {
+  if (S.filter === 'bad') S.filteredFrames = S.camFrames.filter(isBad);
+  else if (S.filter === 'det') S.filteredFrames = S.camFrames.filter(hasDet);
+  else S.filteredFrames = S.camFrames.slice();
+
+  $('cntAll').textContent = S.camFrames.length;
+  $('cntBad').textContent = S.camFrames.filter(isBad).length;
+  $('cntDet').textContent = S.camFrames.filter(hasDet).length;
+  $('totalLabel').textContent = S.filteredFrames.length;
+  renderFrameList();
+}
+
+function renderFrameList() {
+  const ul = $('frameList');
+  ul.innerHTML = '';
+  S.filteredFrames.forEach((p, i) => {
+    const li = document.createElement('li');
+    const bad = isBad(p);
+    const det = hasDet(p);
+    li.className = 'frame-item' + (i === S.activeIdx ? ' active' : '') +
+      (bad ? ' bad' : det ? ' det' : ' normal');
+    const tags = (p.quality_tags || []).filter(t => t !== 'normal').join(', ');
+    const objCount = (p.objects || []).length;
+    const displaySeq = p.raw_frame_idx !== undefined ? p.raw_frame_idx : p.frame_seq;
+    li.innerHTML =
+      '<span class="fi-seq">#' + displaySeq + '</span>' +
+      '<span class="fi-score" style="color:' + scoreColor(p.quality_score) + '">' +
+        (p.quality_score !== undefined ? p.quality_score.toFixed(2) : '—') + '</span>' +
+      '<span class="fi-tags">' + esc(p.action === 'skip_inference' ? (p.reason || 'skipped') : tags || '') + '</span>' +
+      (objCount > 0 ? '<span class="fi-obj">' + objCount + ' obj</span>' : '');
+    li.onclick = () => selectFrame(i);
+    ul.appendChild(li);
+  });
+}
+
+function scoreColor(s) {
+  if (s === undefined || s === null) return 'var(--dim)';
+  if (s >= 0.8) return 'var(--green)';
+  if (s >= 0.6) return 'var(--yellow)';
+  return 'var(--red)';
+}
+
+/* ── Frame display ── */
+function selectFrame(idx) {
+  if (idx < 0 || idx >= S.filteredFrames.length) return;
+  S.activeIdx = idx;
+  const p = S.filteredFrames[idx];
+  $('seqInput').value = idx;
+
+  // Highlight in list
+  document.querySelectorAll('.frame-item').forEach((li, i) => li.classList.toggle('active', i === idx));
+
+  // Scroll into view
+  const items = document.querySelectorAll('.frame-item');
+  if (items[idx]) items[idx].scrollIntoView({block: 'nearest'});
+
+  // Load image
+  loadImage(p);
+
+  // Render fields
+  renderFields(p);
+}
+
+async function loadImage(p) {
+  if (!S.mcapPath) {
+    $('noFrame').style.display = 'block';
+    $('noFrame').textContent = 'Load MCAP first to view frame images';
+    $('frameImg').style.display = 'none';
+    return;
+  }
+  const img = $('frameImg');
+  const spinner = $('imgSpinner');
+  $('noFrame').style.display = 'none';
+  img.style.display = 'block';
+  spinner.style.display = 'block';
+
+  if (S.imgBlobUrl) {
+    URL.revokeObjectURL(S.imgBlobUrl);
+    S.imgBlobUrl = null;
+  }
+
+  const onOk = () => { spinner.style.display = 'none'; };
+  const onErr = (msg) => {
+    spinner.style.display = 'none';
+    $('noFrame').style.display = 'block';
+    $('noFrame').textContent = msg || 'Failed to load frame';
+    img.style.display = 'none';
+  };
+
+  try {
+    if (S.showYolo && p.objects && p.objects.length > 0) {
+      $('yoloBtn').textContent = 'Boxes ON (pipeline)';
+      const r = await fetch('/mcap/draw_frame', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mcap_path: S.mcapPath,
+          topic: p.topic,
+          timestamp_ns: p.timestamp_ns,
+          raw_frame_idx: p.raw_frame_idx,
+          frame_seq: p.frame_seq,
+          objects: p.objects,
+        }),
+      });
+      if (!r.ok) {
+        let detail = '';
+        try { const j = await r.json(); detail = j.detail || ''; } catch { /* ignore */ }
+        throw new Error('draw_frame failed: ' + r.status + (detail ? ' — ' + detail : ''));
+      }
+      const blob = await r.blob();
+      S.imgBlobUrl = URL.createObjectURL(blob);
+      img.onload = onOk;
+      img.onerror = () => onErr('Failed to display annotated frame');
+      img.src = S.imgBlobUrl;
+      return;
+    }
+
+    if (S.showYolo) {
+      $('yoloBtn').textContent = 'Boxes ON (live)';
+      let url = '/mcap/frame_yolo?mcap_path=' + enc(S.mcapPath) +
+        '&topic=' + enc(p.topic) + '&timestamp_ns=' + p.timestamp_ns +
+        (p.raw_frame_idx !== undefined ? '&raw_frame_idx=' + p.raw_frame_idx : '') +
+        '&frame_seq=' + (p.frame_seq || 0) +
+        '&model_path=' + enc('models/yolov8n.onnx');
+      img.onload = onOk;
+      img.onerror = () => onErr('Live YOLO failed — frame may have no detections at current threshold');
+      img.src = url + '&_t=' + Date.now();
+      return;
+    }
+
+    $('yoloBtn').textContent = 'Show Boxes';
+    let url = '/mcap/frame?mcap_path=' + enc(S.mcapPath) +
+      '&topic=' + enc(p.topic) + '&timestamp_ns=' + p.timestamp_ns +
+      (p.raw_frame_idx !== undefined ? '&raw_frame_idx=' + p.raw_frame_idx : '') +
+      '&frame_seq=' + (p.frame_seq || 0);
+    img.onload = onOk;
+    img.onerror = () => onErr('Failed to decode frame');
+    img.src = url + '&_t=' + Date.now();
+  } catch (e) {
+    onErr(e.message);
+  }
+}
+
+function renderFields(p) {
+  const tb = $('fieldTable').querySelector('tbody');
+  tb.innerHTML = '';
+
+  const fields = [
+    ['topic', camLabel(p.topic)],
+    ['topic (full)', p.topic],
+    ['raw_frame_idx', p.raw_frame_idx !== undefined ? p.raw_frame_idx : '—'],
+    ['frame_seq (sampled)', p.frame_seq],
+    ['timestamp_ns', p.timestamp_ns],
+    ['mcap_file', p.mcap_file],
+    ['action', p.action],
+  ];
+  if (p.reason) fields.push(['reason', p.reason]);
+  fields.push(['quality_score', p.quality_score !== undefined ? p.quality_score.toFixed(4) : '—']);
+  fields.push(['quality_tags', (p.quality_tags || []).join(', ')]);
+
+  // Penalties from quality_penalties if available
+  if (p.quality_penalties) {
+    Object.entries(p.quality_penalties).forEach(([k, v]) => {
+      if (v > 0) fields.push(['penalty: ' + k, v.toFixed(4)]);
+    });
+  }
+
+  // Model info
+  if (p.model) {
+    fields.push(['model', p.model.name + ' (' + p.model.format + ')']);
+    fields.push(['input_size', (p.model.input_size || []).join('×')]);
+    fields.push(['backend', p.model.backend]);
+    fields.push(['device', p.model.device]);
+  }
+
+  if (p.target_classes) {
+    fields.push(['target_classes', (p.target_classes || []).join(', ')]);
+  }
+
+  fields.push(['objects_count', (p.objects || []).length]);
+
+  fields.forEach(([k, v]) => {
+    const tr = document.createElement('tr');
+    let cls = '';
+    if (k === 'quality_score') {
+      const s = parseFloat(v);
+      if (!isNaN(s)) cls = s >= 0.8 ? 'good' : s >= 0.6 ? 'warn' : 'bad';
+    }
+    if (k === 'action') {
+      cls = v === 'inferred' ? 'good' : v === 'skip_inference' ? 'warn' : '';
+    }
+    tr.innerHTML = '<td class="fk">' + esc(k) + '</td><td class="fv ' + cls + '">' + esc(String(v)) + '</td>';
+    tb.appendChild(tr);
+  });
+
+  // Objects
+  const objSec = $('objectsSection');
+  const objList = $('objectsList');
+  if (p.objects && p.objects.length > 0) {
+    objSec.style.display = 'block';
+    objList.innerHTML = '';
+    p.objects.forEach(o => {
+      const div = document.createElement('div');
+      div.className = 'obj-card';
+      const bbox = o.bbox ? (o.bbox.x1 !== undefined
+        ? '[' + o.bbox.x1 + ', ' + o.bbox.y1 + ', ' + o.bbox.x2 + ', ' + o.bbox.y2 + ']'
+        : JSON.stringify(o.bbox)) : '';
+      div.innerHTML =
+        '<div class="obj-header">' +
+          '<span class="obj-label">' + esc(o.label) + ' (id:' + o.class_id + ')</span>' +
+          '<span class="obj-conf" style="color:' + scoreColor(o.confidence) + '">' +
+            (o.confidence * 100).toFixed(1) + '%</span>' +
+        '</div>' +
+        '<div class="obj-bbox">bbox: ' + bbox + '</div>';
+      objList.appendChild(div);
+    });
+  } else {
+    objSec.style.display = 'none';
+  }
+
+  // Latency
+  const latSec = $('latencySection');
+  const latTb = $('latencyTable').querySelector('tbody');
+  if (p.latency_ms && typeof p.latency_ms === 'object') {
+    latSec.style.display = 'block';
+    latTb.innerHTML = '';
+    Object.entries(p.latency_ms).forEach(([k, v]) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td class="fk">' + esc(k) + '</td><td class="fv">' +
+        (typeof v === 'number' ? v.toFixed(1) : v) + '</td>';
+      latTb.appendChild(tr);
+    });
+  } else {
+    latSec.style.display = 'none';
+  }
+}
+
+function clearFrame() {
+  $('frameImg').style.display = 'none';
+  $('noFrame').style.display = 'block';
+  $('noFrame').textContent = 'No frames to display';
+  $('fieldTable').querySelector('tbody').innerHTML = '';
+  $('objectsSection').style.display = 'none';
+  $('latencySection').style.display = 'none';
+}
+
+/* ── Navigation ── */
+function navFrame(delta) {
+  const next = S.activeIdx + delta;
+  if (next >= 0 && next < S.filteredFrames.length) selectFrame(next);
+}
+
+function jumpToSeq(val) {
+  const n = parseInt(val, 10);
+  if (!isNaN(n) && n >= 0 && n < S.filteredFrames.length) selectFrame(n);
+}
+
+function toggleYolo() {
+  S.showYolo = !S.showYolo;
+  $('yoloBtn').classList.toggle('on', S.showYolo);
+  if (S.activeIdx >= 0) loadImage(S.filteredFrames[S.activeIdx]);
+  else if (!S.showYolo) $('yoloBtn').textContent = 'Show Boxes';
+}
+
+/* ── Keyboard ── */
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'ArrowLeft' || e.code === 'ArrowUp') { e.preventDefault(); navFrame(-1); }
+  else if (e.code === 'ArrowRight' || e.code === 'ArrowDown') { e.preventDefault(); navFrame(1); }
+  else if (e.code === 'KeyY') { e.preventDefault(); toggleYolo(); }
+});
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+/* ── Init ── */
+$('mcapInput').addEventListener('keydown', e => { if (e.key === 'Enter') loadMcap(); });
+$('outputInput').addEventListener('keydown', e => { if (e.key === 'Enter') loadResults(); });
+
+(async function autoLoad() {
+  try {
+    const r = await fetch('/pipeline/review_index?output_dir=outputs/yolo_test_v2');
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data.predictions && data.predictions.length > 0) {
+      S.outputDir = 'outputs/yolo_test_v2';
+      S.predictions = data.predictions;
+      const topicSet = new Set();
+      S.predictions.forEach(p => topicSet.add(p.topic));
+      S.cameras = Array.from(topicSet).sort();
+      if (data.report_urls) {
+        $('linkQuality').href = data.report_urls.quality_html;
+        $('linkYolo').href = data.report_urls.yolo_html;
+      }
+      $('linkMetrics').href = metricsLinkUrl('outputs/yolo_test_v2');
+      showUI();
+      renderCameras();
+      await ensureMcapPath();
+      if (S.cameras.length > 0) selectCamera(S.cameras[0]);
+      const totalBad = S.predictions.filter(isBad).length;
+      const totalDet = S.predictions.filter(hasDet).length;
+      $('statusBar').innerHTML = '<b>' + S.predictions.length + ' frames</b> auto-loaded · ' +
+        '<span style="color:var(--red)">' + totalBad + ' bad</span> · ' +
+        '<span style="color:var(--green)">' + totalDet + ' with detections</span>';
+    }
+  } catch { /* no default data available */ }
+})();
+</script>
+
+</body>
+</html>

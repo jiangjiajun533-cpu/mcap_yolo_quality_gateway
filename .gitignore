@@ -1,0 +1,51 @@
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ──
+.venv/
+venv/
+env/
+
+# ── IDE / Editor ──
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── Environment / Secrets ──
+.env
+.env.*
+
+# ── Testing cache ──
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# ── ONNX models (too large for git, README explains how to download) ──
+models/*.onnx
+models/*.pt
+models/*.weights
+models/*.engine
+
+# ── MCAP test data (binary, too large; README §8 explains how to generate) ──
+test_data/*.mcap
+
+# ── Pipeline outputs (generated at runtime, not source code) ──
+outputs/
+
+# ── OS junk ──
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Session / scratch ──
+SESSION_CONTEXT.md
