@@ -18,25 +18,10 @@ from app.api.mcap import router as mcap_router
 from app.api.jobs import router as jobs_router
 from app.api.yolo import router as yolo_preview_router
 from app.api.pipeline_review import router as pipeline_review_router
+from app.api.metrics import router as metrics_router
+from app.core.paths import OUTPUTS_ROOT, PROJECT_ROOT, resolve_output_dir
 
-# Project root (mcap_yolo_quality_gateway/) — stable paths regardless of uvicorn cwd
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
-
-def _resolve_output_dir(output_dir: str) -> Path:
-    """Resolve CLI/API output_dir to an absolute path under project or cwd."""
-    raw = output_dir.strip().replace("\\", "/").lstrip("./")
-    p = Path(raw)
-    if p.is_absolute() and p.is_dir():
-        return p
-    candidates = [
-        Path.cwd() / raw,
-        _PROJECT_ROOT / raw,
-    ]
-    for c in candidates:
-        if c.is_dir():
-            return c.resolve()
-    return (_PROJECT_ROOT / raw).resolve()
+_PROJECT_ROOT = PROJECT_ROOT
 
 
 app = FastAPI(
@@ -61,9 +46,10 @@ app.include_router(mcap_router)
 app.include_router(jobs_router)
 app.include_router(yolo_preview_router)
 app.include_router(pipeline_review_router)
+app.include_router(metrics_router)
 
 # Serve generated reports and sample images (always from project outputs/)
-_outputs = _PROJECT_ROOT / "outputs"
+_outputs = OUTPUTS_ROOT
 _outputs.mkdir(exist_ok=True)
 app.mount("/outputs", StaticFiles(directory=str(_outputs), html=False), name="outputs")
 
@@ -75,7 +61,7 @@ app.mount("/static", StaticFiles(directory=str(_static)), name="static")
 
 @app.get("/report/quality", include_in_schema=False)
 async def report_quality(output_dir: str = Query("outputs/yolo_test_v2")):
-    root = _resolve_output_dir(output_dir)
+    root = resolve_output_dir(output_dir)
     p = root / "quality_report.html"
     if not p.is_file():
         raise HTTPException(status_code=404, detail=f"Report not found: {p}")
@@ -84,7 +70,7 @@ async def report_quality(output_dir: str = Query("outputs/yolo_test_v2")):
 
 @app.get("/report/yolo", include_in_schema=False)
 async def report_yolo(output_dir: str = Query("outputs/yolo_test_v2")):
-    root = _resolve_output_dir(output_dir)
+    root = resolve_output_dir(output_dir)
     p = root / "yolo_report.html"
     if not p.is_file():
         raise HTTPException(status_code=404, detail=f"Report not found: {p}")
@@ -93,7 +79,7 @@ async def report_yolo(output_dir: str = Query("outputs/yolo_test_v2")):
 
 @app.get("/report/metrics", include_in_schema=False)
 async def report_metrics(output_dir: str = Query("outputs/yolo_test_v2")):
-    root = _resolve_output_dir(output_dir)
+    root = resolve_output_dir(output_dir)
     p = root / "metrics.json"
     if not p.is_file():
         raise HTTPException(status_code=404, detail=f"Metrics not found: {p}")

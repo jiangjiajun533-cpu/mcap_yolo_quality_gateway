@@ -19,6 +19,7 @@ import numpy as np
 from app.core.logging import get_logger
 from app.mcap_io.message_types import McapSummary
 from app.quality.aggregator import TopicQualitySummary
+from app.quality.analyzer import quality_result_to_dict
 from app.quality.duplicate import DuplicateGroup, duplicate_groups_to_dict
 from app.quality.sequence_analyzer import SequenceSummary, sequence_summary_to_dict
 from app.yolo.pipeline import InferenceRecord, PipelineStats
@@ -59,6 +60,15 @@ def write_mcap_summary(
                 "duration_sec": round(s.duration_sec, 3),
                 "topic_count": s.topic_count,
                 "image_topics": [t.topic for t in s.image_topics],
+                "topics": [
+                    {
+                        "topic": t.topic,
+                        "message_type": t.message_type,
+                        "message_count": t.message_count,
+                        "is_image_topic": t.is_image_topic,
+                    }
+                    for t in s.topics
+                ],
                 "start_time_ns": s.start_time_ns,
                 "end_time_ns": s.end_time_ns,
             }
@@ -78,6 +88,7 @@ def write_quality_report(
     sequence_summaries: Optional[List[SequenceSummary]] = None,
     pipeline_stats: Optional[PipelineStats] = None,
     duplicate_results: Optional[Dict[str, List[DuplicateGroup]]] = None,
+    batch_failures: Optional[List[Dict[str, str]]] = None,
 ) -> Path:
     """Generate ``quality_report.json``."""
     data: Dict[str, Any] = {
@@ -92,14 +103,7 @@ def write_quality_report(
         if worst:
             topic_key = ts.topic.replace("/", "_").strip("_")
             data.setdefault("worst_frames", {})[topic_key] = [
-                {
-                    "frame_seq": w.frame_seq,
-                    "timestamp_ns": w.timestamp_ns,
-                    "quality_score": w.quality_score,
-                    "quality_tags": w.quality_tags,
-                    "penalties": w.penalties,
-                }
-                for w in worst[:20]
+                quality_result_to_dict(w) for w in worst[:20]
             ]
     if pipeline_stats:
         data["pipeline_stats"] = pipeline_stats.to_dict()
@@ -110,6 +114,8 @@ def write_quality_report(
             for topic, groups in duplicate_results.items()
             if groups
         ]
+    if batch_failures:
+        data["batch_failures"] = batch_failures
 
     out = output_dir / "quality_report.json"
     _write_json(out, data)
@@ -144,6 +150,7 @@ def write_metrics(
     records: List[InferenceRecord],
     target_analyzer: Optional[TargetAnalyzer] = None,
     wall_time_sec: float = 0.0,
+    batch_failures: Optional[List[Dict[str, str]]] = None,
 ) -> Path:
     """Generate ``metrics.json`` with sampling info, latencies, target analysis."""
     inferred = [r for r in records if r.action == "inferred"]
@@ -162,6 +169,8 @@ def write_metrics(
     }
     if target_analyzer:
         data["target_analysis"] = target_analyzer.finalize()["target_analysis"]
+    if batch_failures:
+        data["batch_failures"] = batch_failures
 
     out = output_dir / "metrics.json"
     _write_json(out, data)

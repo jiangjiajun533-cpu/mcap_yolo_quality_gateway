@@ -221,3 +221,65 @@ def _make_thumbnail(img: np.ndarray, max_side: int = 640) -> np.ndarray:
 def _write_index(path: Path, entries: list[dict]) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"samples": entries}, f, indent=2, ensure_ascii=False)
+
+
+def _detection_fname(topic: str, frame_seq: int, objects: list) -> str:
+    labels = sorted({d["label"] if isinstance(d, dict) else d.label for d in objects})
+    label_str = "_".join(labels[:3])
+    short_topic = _safe_filename(_topic_short(topic))
+    return f"{short_topic}_{frame_seq:06d}_{_safe_filename(label_str)}.jpg"
+
+
+def rebuild_detection_index(output_dir: Path) -> int:
+    """
+    Rebuild detection_samples/index.json from yolo_predictions.json + on-disk JPGs.
+
+    Use when index.json was cleared but exported images remain.
+    """
+    det_dir = output_dir / "detection_samples"
+    if not det_dir.is_dir():
+        return 0
+
+    entries: list[dict] = []
+    pred_path = output_dir / "yolo_predictions.json"
+    if pred_path.exists():
+        data = json.loads(pred_path.read_text(encoding="utf-8"))
+        preds = data.get("predictions") or []
+        for p in preds:
+            if p.get("action") != "inferred" or not p.get("objects"):
+                continue
+            fname = _detection_fname(p["topic"], int(p.get("frame_seq", 0)), p["objects"])
+            if not (det_dir / fname).is_file():
+                continue
+            entries.append({
+                "file": fname,
+                "mcap_file": p.get("mcap_file", ""),
+                "topic": p.get("topic", ""),
+                "frame_seq": p.get("frame_seq"),
+                "raw_frame_idx": p.get("raw_frame_idx"),
+                "timestamp_ns": p.get("timestamp_ns"),
+                "quality_score": p.get("quality_score"),
+                "objects": p.get("objects") or [],
+            })
+
+    if not entries:
+        pat = re.compile(r"^(.+)_(\d{6})_(.+)\.jpg$", re.IGNORECASE)
+        for fpath in sorted(det_dir.glob("*.jpg")):
+            m = pat.match(fpath.name)
+            if not m:
+                continue
+            short_topic, seq_s, _labels = m.groups()
+            entries.append({
+                "file": fpath.name,
+                "mcap_file": "sample.mcap",
+                "topic": short_topic,
+                "frame_seq": int(seq_s),
+                "raw_frame_idx": None,
+                "timestamp_ns": None,
+                "quality_score": None,
+                "objects": [],
+            })
+
+    _write_index(det_dir / "index.json", entries)
+    logger.info(f"Rebuilt detection index: {len(entries)} entries")
+    return len(entries)

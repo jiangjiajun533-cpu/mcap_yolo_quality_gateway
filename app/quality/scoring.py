@@ -8,7 +8,7 @@ score = 1.0 - blur_penalty - exposure_penalty - contrast_penalty
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from app.core.config import settings
 
@@ -21,6 +21,11 @@ class QualityResult:
     topic: str = ""
     frame_seq: int = 0
     timestamp_ns: int = 0
+    # FR-IMG-003 (also exported in quality / YOLO reports)
+    log_time_ns: int = 0
+    publish_time_ns: Optional[int] = None
+    ros_stamp_ns: Optional[int] = None
+    timestamp_source: str = "log_time"
 
     # --- Dimensions ---
     width: int = 0

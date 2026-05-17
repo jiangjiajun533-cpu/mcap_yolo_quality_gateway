@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter
 
 from app.core.config import settings
+from app.core.paths import path_hints
 
 router = APIRouter()
 
@@ -31,3 +32,9 @@ def health_check():
         "mcap_reader_available": mcap_reader_available,
         "yolo_backend": yolo_backend,
     }
+
+
+@router.get("/path_hints")
+def get_path_hints():
+    """Dashboard: how to fill MCAP / output paths for this server (Docker vs local)."""
+    return path_hints()

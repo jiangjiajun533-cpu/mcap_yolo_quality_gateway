@@ -124,8 +124,41 @@ class PipelineStats:
     estimated_actual_fps: float = 0.0
     max_frames: int = 0
 
+    # FR-MCAP-003: user clip window (relative seconds from MCAP start; 0 = not set)
+    clip_start_sec: float = 0.0
+    clip_end_sec: float = 0.0
+    mcap_metadata_duration_sec: float = 0.0
+    # Actual log-time span of sampled frames processed in this run
+    processed_start_time_ns: Optional[int] = None
+    processed_end_time_ns: Optional[int] = None
+
     def to_dict(self) -> dict:
+        proc_dur = None
+        if (
+            self.processed_start_time_ns is not None
+            and self.processed_end_time_ns is not None
+            and self.processed_end_time_ns > self.processed_start_time_ns
+        ):
+            proc_dur = round(
+                (self.processed_end_time_ns - self.processed_start_time_ns) / 1e9, 3
+            )
+        meta_warn = None
+        if self.mcap_metadata_duration_sec <= 0:
+            meta_warn = (
+                "MCAP summary duration_sec is 0 (invalid or missing time span); "
+                "source FPS cannot be estimated; --target-fps falls back to --sample-every-n"
+            )
         return {
+            "processing_time_range": {
+                "clip_start_sec": self.clip_start_sec,
+                "clip_end_sec": self.clip_end_sec,
+                "clip_end_unlimited": self.clip_end_sec <= 0,
+                "processed_start_time_ns": self.processed_start_time_ns,
+                "processed_end_time_ns": self.processed_end_time_ns,
+                "processed_duration_sec": proc_dur,
+                "mcap_metadata_duration_sec": round(self.mcap_metadata_duration_sec, 3),
+                "metadata_warning": meta_warn,
+            },
             "sampling": {
                 "mode": self.sampling_mode,
                 "target_fps": self.target_fps,
@@ -164,8 +197,15 @@ class InferenceRecord:
     frame_seq: int = 0       # sequential index within sampled frames for this topic
     raw_frame_idx: int = 0   # original message index in the MCAP topic (before sampling)
     timestamp_ns: int = 0
+    # FR-IMG-003
+    log_time_ns: int = 0
+    publish_time_ns: Optional[int] = None
+    ros_stamp_ns: Optional[int] = None
+    timestamp_source: str = "log_time"
 
     quality_score: float = 0.0
+    # Full per-frame quality (FR-QUALITY-001); used by CLI reports / aggregators
+    quality: Optional[QualityResult] = field(default=None, repr=False)
     quality_tags: List[str] = field(default_factory=list)
     quality_penalties: dict = field(default_factory=dict)
     is_bad_quality: bool = False
@@ -192,6 +232,9 @@ class InferenceRecord:
             "frame_seq": self.frame_seq,
             "raw_frame_idx": self.raw_frame_idx,
             "timestamp_ns": self.timestamp_ns,
+            "log_time_ns": self.log_time_ns,
+            "ros_stamp_ns": self.ros_stamp_ns,
+            "timestamp_source": self.timestamp_source,
             "quality_score": self.quality_score,
             "quality_tags": self.quality_tags,
             "action": self.action,
@@ -202,6 +245,8 @@ class InferenceRecord:
             d["model"] = model_info
         if target_classes is not None:
             d["target_classes"] = target_classes
+        if self.publish_time_ns is not None:
+            d["publish_time_ns"] = self.publish_time_ns
         d["objects"] = [det.to_dict() for det in self.objects]
         d["latency_ms"] = self.latency_ms
         return d
@@ -339,9 +384,19 @@ def run_pipeline(
         abs_start_ns = summary.start_time_ns + int(start_sec * 1e9)
     if end_sec > 0:
         abs_end_ns = summary.start_time_ns + int(end_sec * 1e9)
-    if abs_start_ns and abs_end_ns and abs_start_ns >= abs_end_ns:
+    if abs_start_ns is not None and abs_end_ns is not None and abs_start_ns >= abs_end_ns:
         raise ValueError(
             f"--start-sec ({start_sec}) must be less than --end-sec ({end_sec})"
+        )
+
+    stats.clip_start_sec = start_sec
+    stats.clip_end_sec = end_sec
+    stats.mcap_metadata_duration_sec = summary.duration_sec
+    if summary.duration_sec <= 0:
+        logger.warning(
+            f"MCAP {mcap_path.name}: metadata duration_sec=0 "
+            f"(start_ns={summary.start_time_ns}, end_ns={summary.end_time_ns}). "
+            "File may have timestamp/metadata issues; --target-fps cannot derive N from FPS."
         )
 
     # --- Resolve topics ---
@@ -443,6 +498,10 @@ def run_pipeline(
         stats.sampled_frames += 1
         total_sampled += 1
         log_time_ns = message.log_time
+        if stats.processed_start_time_ns is None or log_time_ns < stats.processed_start_time_ns:
+            stats.processed_start_time_ns = log_time_ns
+        if stats.processed_end_time_ns is None or log_time_ns > stats.processed_end_time_ns:
+            stats.processed_end_time_ns = log_time_ns
 
         record = InferenceRecord(
             mcap_file=mcap_path.name,
@@ -468,7 +527,11 @@ def run_pipeline(
             decode_ms = round((time.perf_counter() - t0) * 1000, 2)
             stats.decode_failed += 1
             logger.warning(f"Decode failed {topic} seq={frame_seq}: {exc}")
+            record.log_time_ns = log_time_ns
+            record.publish_time_ns = message.publish_time or None
+            record.ros_stamp_ns = None
             record.timestamp_ns = log_time_ns
+            record.timestamp_source = "log_time"
             record.action = "decode_error"
             record.reason = str(exc)
             record.latency_ms = _zero_latency(decode_ms)
@@ -476,9 +539,13 @@ def run_pipeline(
             yield record
             continue
 
+        record.log_time_ns = frame.log_time_ns
+        record.publish_time_ns = frame.publish_time_ns
+        record.ros_stamp_ns = frame.ros_stamp_ns
         record.timestamp_ns = (
             frame.ros_stamp_ns or frame.publish_time_ns or log_time_ns
         )
+        record.timestamp_source = frame.timestamp_source
 
         # Per-frame timestamp anomaly (reversed or >10s gap)
         ts = record.timestamp_ns
@@ -494,6 +561,7 @@ def run_pipeline(
         quality_ms = round((time.perf_counter() - t1) * 1000, 2)
 
         stats.quality_analyzed += 1
+        record.quality = qr
         record.quality_score = qr.quality_score
         record.quality_tags = qr.quality_tags
         record.quality_penalties = qr.penalties

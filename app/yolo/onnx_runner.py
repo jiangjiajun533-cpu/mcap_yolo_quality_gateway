@@ -49,11 +49,24 @@ class YoloOnnxRunner:
             opts.inter_op_num_threads = 0
             opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
-            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] \
-                if device == "gpu" else ["CPUExecutionProvider"]
-            self._session = ort.InferenceSession(
-                str(model_path), sess_options=opts, providers=providers,
+            requested_providers = (
+                ["CUDAExecutionProvider", "CPUExecutionProvider"]
+                if device == "gpu"
+                else ["CPUExecutionProvider"]
             )
+            self._session = ort.InferenceSession(
+                str(model_path), sess_options=opts, providers=requested_providers,
+            )
+            active_providers = self._session.get_providers()
+            self._using_cuda = (
+                active_providers and active_providers[0] == "CUDAExecutionProvider"
+            )
+            if device == "gpu" and not self._using_cuda:
+                logger.warning(
+                    "CUDAExecutionProvider unavailable; fell back to CPU. "
+                    "Install CUDA 12.x, cuDNN 9.x, and onnxruntime-gpu "
+                    "(see README §18.1), or run with --device cpu."
+                )
         except Exception as exc:
             raise ModelLoadError(f"Failed to load ONNX model {model_path}: {exc}") from exc
 
@@ -72,7 +85,8 @@ class YoloOnnxRunner:
             settings.min_box_side_px if min_box_side_px is None else min_box_side_px
         )
         self.input_size = input_size
-        self.device = device
+        self.device_requested = device
+        self.device = "gpu" if getattr(self, "_using_cuda", False) else "cpu"
 
         self.class_names: List[str] = load_labels(labels_path)
         self.target_class_ids: Set[int] = build_target_class_ids(
@@ -83,7 +97,8 @@ class YoloOnnxRunner:
             f"YoloOnnxRunner: model={self.model_name} "
             f"input={self._input_name}{self._input_shape} "
             f"classes={len(self.class_names)} targets={len(self.target_class_ids)} "
-            f"device={device}"
+            f"device={self.device}"
+            + (f" (requested={device})" if device != self.device else "")
         )
 
     def infer(self, img: np.ndarray) -> Tuple[List[Detection], Dict[str, float]]:
@@ -132,6 +147,72 @@ class YoloOnnxRunner:
             "total_ms":      round((t_end - t_start) * 1000, 2),
         }
         return detections, latency
+
+    def infer_batch(
+        self, images: List[np.ndarray]
+    ) -> List[Tuple[List[Detection], Dict[str, float]]]:
+        """
+        Run inference on a batch of BGR images.
+
+        Each image is preprocessed individually then stacked into a single
+        ONNX batch call when the model's batch dimension is dynamic.
+        Falls back to sequential inference otherwise.
+        """
+        if not images:
+            return []
+
+        batch_dim = self._input_shape[0]
+        if isinstance(batch_dim, str) or batch_dim == -1 or batch_dim >= len(images):
+            return self._batch_forward(images)
+        return [self.infer(img) for img in images]
+
+    def _batch_forward(
+        self, images: List[np.ndarray]
+    ) -> List[Tuple[List[Detection], Dict[str, float]]]:
+        t_start = time.perf_counter()
+
+        tensors = []
+        metas: List = []
+        for img in images:
+            tensor, meta = preprocess(img, self.input_size)
+            tensors.append(tensor[0])
+            metas.append(meta)
+        batch_tensor = np.stack(tensors, axis=0)
+        t_pre = time.perf_counter()
+
+        try:
+            outputs = self._session.run(None, {self._input_name: batch_tensor})
+        except Exception as exc:
+            raise InferenceError(f"Batch inference failed: {exc}") from exc
+        t_inf = time.perf_counter()
+
+        results: List[Tuple[List[Detection], Dict[str, float]]] = []
+        raw_batch = outputs[0]
+        for i, meta in enumerate(metas):
+            raw_single = raw_batch[i:i+1]
+            detections = postprocess(
+                raw_output=raw_single,
+                meta=meta,
+                class_names=self.class_names,
+                conf_threshold=self.conf_threshold,
+                iou_threshold=self.nms_threshold,
+                target_class_ids=self.target_class_ids,
+                min_box_side_px=self.min_box_side_px,
+            )
+            results.append((detections, {}))
+        t_end = time.perf_counter()
+
+        pre_ms = round((t_pre - t_start) * 1000, 2)
+        inf_ms = round((t_inf - t_pre) * 1000, 2)
+        post_ms = round((t_end - t_inf) * 1000, 2)
+        total_ms = round((t_end - t_start) * 1000, 2)
+        per_img = {
+            "preprocess_ms": round(pre_ms / len(images), 2),
+            "inference_ms": round(inf_ms / len(images), 2),
+            "postprocess_ms": round(post_ms / len(images), 2),
+            "total_ms": round(total_ms / len(images), 2),
+        }
+        return [(det, per_img) for det, _ in results]
 
     def model_info(self) -> dict:
         """Return model metadata dict for report output (FR-YOLO-006)."""

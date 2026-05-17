@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.core.paths import resolve_mcap_path
 from app.mcap_io.reader import read_mcap_summary
 from app.jobs.manager import job_manager
 from app.jobs.worker import launch_worker
@@ -45,11 +46,12 @@ class InspectRequest(BaseModel):
 
 @router.post("/inspect")
 def mcap_inspect(req: InspectRequest):
-    p = Path(req.mcap_path)
-    if not p.is_absolute():
-        p = p.resolve()
-    if not p.exists():
-        raise HTTPException(status_code=404, detail=f"MCAP file not found: {p}")
+    p = resolve_mcap_path(req.mcap_path)
+    if not p.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"MCAP file not found: {req.mcap_path} (resolved: {p})",
+        )
 
     summary = read_mcap_summary(p)
     return {
@@ -74,15 +76,17 @@ class QualityScanRequest(BaseModel):
     topics: Optional[List[str]] = None
     sample_every_n: int = Field(default=1, ge=1)
     target_fps: float = Field(default=0.0, ge=0.0)
+    start_sec: float = Field(default=0.0, ge=0.0, description="Relative start sec from MCAP beginning (FR-MCAP-003)")
+    end_sec: float = Field(default=0.0, ge=0.0, description="Relative end sec; 0 = no upper limit")
     quality_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
     max_frames: int = Field(default=0, ge=0)
     output_dir: Optional[str] = None
 
 @router.post("/quality_scan")
 def mcap_quality_scan(req: QualityScanRequest):
-    p = Path(req.mcap_path)
-    if not p.exists():
-        raise HTTPException(status_code=404, detail=f"MCAP file not found: {p}")
+    p = resolve_mcap_path(req.mcap_path)
+    if not p.is_file():
+        raise HTTPException(status_code=404, detail=f"MCAP file not found: {req.mcap_path}")
 
     job = job_manager.create("quality_scan", params=req.model_dump())
     if req.output_dir is None:
@@ -102,6 +106,8 @@ class YoloInferRequest(BaseModel):
     target_classes: Optional[List[str]] = None
     sample_every_n: int = Field(default=1, ge=1)
     target_fps: float = Field(default=0.0, ge=0.0)
+    start_sec: float = Field(default=0.0, ge=0.0, description="Relative start sec from MCAP beginning (FR-MCAP-003)")
+    end_sec: float = Field(default=0.0, ge=0.0, description="Relative end sec; 0 = no upper limit")
     quality_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
     conf_threshold: float = Field(default=settings.conf_threshold, ge=0.0, le=1.0)
     nms_threshold: float = Field(default=settings.nms_threshold, ge=0.0, le=1.0)
@@ -113,9 +119,9 @@ class YoloInferRequest(BaseModel):
 
 @router.post("/yolo_infer")
 def mcap_yolo_infer(req: YoloInferRequest):
-    p = Path(req.mcap_path)
-    if not p.exists():
-        raise HTTPException(status_code=404, detail=f"MCAP file not found: {p}")
+    p = resolve_mcap_path(req.mcap_path)
+    if not p.is_file():
+        raise HTTPException(status_code=404, detail=f"MCAP file not found: {req.mcap_path}")
 
     job = job_manager.create("yolo_infer", params=req.model_dump())
     if req.output_dir is None:

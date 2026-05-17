@@ -51,10 +51,10 @@ class Settings(BaseSettings):
     labels_path: Path = Field(default=Path("models/coco_classes.txt"))
     yolo_input_size: int = Field(default=640)
     conf_threshold: float = Field(
-        default=0.6,
+        default=0.25,
         ge=0.0,
         le=1.0,
-        description="YOLO detection conf filter (FR-YOLO-001 example is 0.25; configurable, default 0.6 for stricter indoor MCAP)",
+        description="YOLO detection conf filter (FR-YOLO-001 example default 0.25)",
     )
     nms_threshold: float = Field(default=0.45, ge=0.0, le=1.0)
     min_box_side_px: int = Field(

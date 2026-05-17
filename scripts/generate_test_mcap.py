@@ -3,7 +3,10 @@
 Generate a synthetic test MCAP file with CompressedImage messages.
 
 Usage:
-  python scripts/generate_test_mcap.py [--output test_data/sample.mcap] [--frames 100]
+  python scripts/generate_test_mcap.py [--output test_data/synthetic.mcap] [--frames 100]
+
+  说明：官方/老师提供的真实数据请放在 test_data/sample.mcap；
+  本脚本生成的是合成测试数据，默认输出 test_data/synthetic.mcap，避免覆盖 sample.mcap。
 
 The generated file contains a single topic '/camera/front/image/compressed'
 with JPEG-encoded synthetic images (colour gradients + noise) so the pipeline
@@ -105,7 +108,7 @@ def _encode_ros1_compressed_image(img: np.ndarray, stamp_ns: int, frame_id: str 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate a test MCAP file")
-    parser.add_argument("--output", type=str, default="test_data/sample.mcap")
+    parser.add_argument("--output", type=str, default="test_data/synthetic.mcap")
     parser.add_argument("--frames", type=int, default=100)
     parser.add_argument("--fps", type=int, default=FPS)
     args = parser.parse_args()

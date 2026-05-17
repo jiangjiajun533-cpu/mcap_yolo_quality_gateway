@@ -4,7 +4,7 @@ import pytest
 
 from app.quality.metrics import compute_all_metrics
 from app.quality.scoring import QualityResult, compute_quality_score
-from app.quality.analyzer import analyze_frame
+from app.quality.analyzer import analyze_frame, quality_result_to_dict
 from app.mcap_io.message_types import FrameRecord
 
 
@@ -84,3 +84,20 @@ class TestAnalyzer:
         result = analyze_frame(frame)
         assert result.is_corrupted is True
         assert result.quality_score == 0.0
+
+    def test_timestamp_fields_in_report_dict(self):
+        img = np.random.randint(80, 180, (120, 160, 3), dtype=np.uint8)
+        frame = _make_frame(
+            img,
+            log_time_ns=2_000_000_000,
+            publish_time_ns=2_100_000_000,
+            ros_stamp_ns=2_050_000_000,
+            timestamp_source="ros_header",
+        )
+        result = analyze_frame(frame)
+        d = quality_result_to_dict(result)
+        assert d["log_time_ns"] == 2_000_000_000
+        assert d["ros_stamp_ns"] == 2_050_000_000
+        assert d["timestamp_source"] == "ros_header"
+        assert d["publish_time_ns"] == 2_100_000_000
+        assert "brightness_mean" in d

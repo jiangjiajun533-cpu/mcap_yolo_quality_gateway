@@ -20,18 +20,58 @@
 - 关键目标类别过滤：`--target-classes`
 - 目标级质量影响分析（FR-YOLO-008）
 - 报告生成：JSON/HTML/Markdown + 坏样本导出 + 检测样本可视化导出
+- 报告增强：质量问题分布柱状图、多相机质量趋势图、自动总体结论生成
 - FastAPI 服务：异步任务提交 + 状态查询 + 单帧预览（加分）
+- Prometheus 兼容 `/metrics` 端点（加分）
+- TensorRT 推理 backend 支持（加分）
+- Batch inference 支持（加分）
+- 前端 Dashboard：Pipeline Frame Reviewer（加分），支持浏览帧列表、查看原图、检测框叠加、多相机切换
 - Docker Compose 一键部署
 
 ## 3. MCAP 输入格式说明
 
-MCAP 是 ROS2 录制的标准存储格式。本系统通过 `mcap` + `mcap-ros1-support` 库读取，不依赖完整的 ROS2 环境。
+MCAP 是 ROS2 录制的标准存储格式。
+
+**MCAP 读取方案选择：方案 B（`mcap` + ROS 消息解码）**
+
+- 使用 `mcap` + `mcap-ros1-support` 库直接读取 MCAP 格式
+- **不依赖完整 ROS2 环境**，纯 Python 工程，适合离线解析
+- 对 MCAP schema、channel、message 有更深入的控制
+- 安装依赖：`pip install mcap mcap-ros1-support`（已包含在 requirements.txt）
+
+**不支持的消息类型：**
+- 非图像 Topic（如 `/tf`、`/joint_states`、`/imu` 等）会被自动识别为非图像并跳过
+- 不支持 `sensor_msgs/PointCloud2` 等 3D 数据
+- 遇到未知消息类型时**不会崩溃**，会静默跳过该 Topic，不影响其他 Topic 的处理
 
 支持的 MCAP 特性：
 - 自动读取 MCAP summary（Topic 列表、消息数量、时间范围）
-- 支持按 Topic 过滤
-- 支持时间范围过滤（`--start-sec` / `--end-sec`）
-- 支持目录批量扫描（`--mcap-dir`）
+- 支持按 Topic 过滤（`--topics`）或自动发现（`--auto-detect-topics true`）
+- 支持时间范围过滤（`--start-sec` / `--end-sec`，FR-MCAP-003）
+- 支持目录批量扫描（`--mcap-dir`）；单个文件失败时跳过并继续，失败列表写入 `quality_report.json` / `metrics.json` 的 `batch_failures`
+
+### FR-MCAP-003 时间范围截取
+
+| 要求 | 实现 |
+|------|------|
+| 按相对秒数截取 | CLI `--start-sec` / `--end-sec`；API 异步任务同样支持 |
+| 范围外消息跳过 | `reader.py` 按 `log_time` 过滤，不进入解码/质量/YOLO |
+| 报告说明实际处理时间范围 | `quality_report.json` / `metrics.json` 的 `processing_time_range`；HTML/MD 报告同步展示 |
+| `start-sec` > `end-sec` | 启动时 `ValueError` 明确报错，不开始处理 |
+
+示例：只处理录制开始后第 10～60 秒：
+
+```bash
+python scripts/run_mcap_yolo_inference.py \
+  --mcap test_data/sample.mcap \
+  --start-sec 10 --end-sec 60 \
+  --target-fps 5 --output-dir outputs/clip_run
+```
+
+**`duration_sec = 0` 与 `start-sec > end-sec` 的区别：**
+
+- `start-sec > end-sec`：用户参数错误 → **直接报错**，不跑流水线。
+- `duration_sec = 0`：MCAP **元数据**里起止时间无效（`end_time <= start_time`），常见于时间戳缺失/损坏的异常文件 → **会打 WARNING**，`--target-fps` 无法从 summary 估算源 FPS，**回退到 `--sample-every-n`**（默认 1 = 仍处理全部采样帧，避免静默丢数据）。报告中 `metadata_warning` 会标明元数据异常；**不等于**“数据一定坏了”，但应人工复核该 MCAP。
 
 ## 4. 支持的 ROS 图像消息类型
 
@@ -66,6 +106,34 @@ docker compose up --build
 docker compose --profile test up --build
 ```
 
+### 6.1 Ubuntu 验收流程（推荐提交前执行）
+
+在 Ubuntu 上先释放 8088 端口，再跑单元测试 + Docker smoke，并校验报告 JSON 字段：
+
+```bash
+cd mcap_yolo_quality_gateway
+
+# 释放端口（二选一）
+fuser -k 8088/tcp 2>/dev/null || true
+# 或: kill $(lsof -ti:8088) 2>/dev/null || true
+
+chmod +x scripts/ubuntu_verify.sh
+./scripts/ubuntu_verify.sh
+```
+
+脚本会依次：`pytest` → 尝试释放 8088 → `docker compose --profile test` → 检查 `outputs/smoke_test/` 中
+`yolo_predictions.json` 的 `log_time_ns` / `ros_stamp_ns` / `timestamp_source`，以及 `quality_report.json` 的 `worst_frames` 完整质量字段。
+
+手动启动 API（与作业一致）：
+
+```bash
+docker compose up --build
+# 浏览器: http://127.0.0.1:8088/docs
+```
+
+**报告中的时间戳（FR-IMG-003）**：`yolo_predictions.json` 与 `quality_report.json` 的 `worst_frames` 均包含
+`log_time_ns`、`ros_stamp_ns`、`timestamp_source`（有 publish 时另含 `publish_time_ns`）。
+
 ## 7. 本机运行方式
 
 ```bash
@@ -78,10 +146,24 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 ## 8. 生成测试 MCAP
 
 ```bash
-python scripts/generate_test_mcap.py --output test_data/sample.mcap --frames 100 --fps 30
+python scripts/generate_test_mcap.py --output test_data/synthetic.mcap --frames 100 --fps 30
 ```
 
 生成包含 100 帧合成 JPEG CompressedImage 的 MCAP 文件，用于 pipeline 验证。
+
+**数据命名约定：**
+
+| 文件 | 用途 |
+|------|------|
+| `test_data/sample.mcap` | 官方/提供的真实 MCAP 元数据（不要用生成脚本覆盖） |
+| `test_data/synthetic.mcap` | `generate_test_mcap.py` 生成的合成测试数据 |
+
+**建议输出目录（作业未强制目录名，仅要求 `outputs/` 下报告结构）：**
+
+| 目录 | 用途 |
+|------|------|
+| `outputs/sample_run/` | 真实 `sample.mcap` 流水线结果 |
+| `outputs/synthetic_run/` | 合成 `synthetic.mcap` 快速自测 |
 
 ## 9. 下载或导出 YOLO ONNX 模型
 
@@ -150,6 +232,55 @@ python scripts/run_mcap_yolo_inference.py \
 
 支持 `--infer-low-quality true` 强制推理低质量帧，`--max-frames 1000` 限制采样帧数。
 
+### 抽帧策略说明
+
+抽帧的核心逻辑是：对每个 Topic 独立地「每 N 条原始消息取 1 帧」。N 的推导流程如下：
+
+```
+用户参数
+  │
+  ├─ --target-fps F > 0 ?（加分功能）
+  │     │
+  │     ├─ 是 → 从 MCAP summary 按 "消息数 / 时长" 估算源 FPS
+  │     │         │
+  │     │         ├─ 源 FPS 可算出（正常情况）
+  │     │         │     → N = round(source_fps / target_fps)，至少为 1
+  │     │         │     例：源 30 FPS, target 5 → N=6 → 每 6 条消息取 1 帧
+  │     │         │
+  │     │         └─ 源 FPS 无法估算（仅 1 条消息 / 时长为 0 等极端边界）
+  │     │               → 打 WARNING 日志，回退到 --sample-every-n
+  │     │               → 数据仍正常处理，不会丢失
+  │     │
+  │     └─ 否 → N = --sample-every-n（默认 1，即全量处理）
+  │
+  └─ --max-frames M > 0 ?
+        │
+        ├─ 是 → 采样帧总数达到 M 后立即停止（跨 Topic 全局计数）
+        └─ 否 → 不限制
+```
+
+**执行流程（对每个 Topic 的每条 MCAP 消息）：**
+
+1. 按 Topic 维护独立的 `raw_index` 计数器（从 0 开始）
+2. 判断 `raw_index % N == 0`：
+   - **整除** → 命中，进入采样：解码 → 质量分析 → 质量门控 → YOLO 推理
+   - **不整除** → 跳过，`skipped_by_sampling++`，不解码、不分析、不占内存
+3. 命中帧经过质量门控后，quality_score ≥ threshold 才进 YOLO；否则标记 `skip_inference`
+4. 达到 `max_frames` 上限后提前终止整条 MCAP
+
+**两个参数同时提供时：** `--target-fps` 优先生效，`--sample-every-n` 仅在源 FPS 无法估算时作为 fallback。
+
+**报告中的体现：** `metrics.json` 的 `sampling` 字段记录最终采用的策略：
+
+| 字段 | 说明 |
+|------|------|
+| `mode` | `"target_fps"` 或 `"sample_every_n"`，表示实际生效的模式 |
+| `computed_sample_every_n` | 最终计算出的 N |
+| `estimated_source_fps` | 从 MCAP summary 估算的源帧率 |
+| `estimated_actual_fps` | 采样后的实际帧率（source_fps / N） |
+| `raw_frames` | 原始消息总数 |
+| `sampled_frames` | 实际处理的帧数 |
+
 ## 12. FastAPI 接口说明
 
 | 方法 | 端点 | 说明 |
@@ -162,6 +293,7 @@ python scripts/run_mcap_yolo_inference.py \
 | GET | `/jobs` | 列出所有任务 |
 | GET | `/mcap/frame` | 单帧 JPEG 预览（加分） |
 | GET | `/mcap/frame_yolo` | 带检测框的单帧预览（加分） |
+| GET | `/metrics` | Prometheus 格式指标（加分） |
 
 完整 API 文档启动后访问 `/docs`。
 
@@ -203,9 +335,9 @@ quality_score = 1.0
 | 参数 | 默认 | 含义 |
 |------|------|------|
 | `--quality-threshold` | **0.6** | 图像质量分；低于此值标记 `bad_quality`，默认跳过 YOLO |
-| `--conf-threshold` | **0.6**（本项目默认；作业 FR-YOLO-001 示例为 0.25，可配置） | 检测框置信度；低于此值的 bbox 在后处理中丢弃 |
+| `--conf-threshold` | **0.25**（与 FR-YOLO-001 示例一致；可通过 `MCAP_CONF_THRESHOLD` / CLI 覆盖） | 检测框置信度；低于此值的 bbox 在后处理中丢弃 |
 
-二者独立配置。作业要求「阈值可配置」，未禁止将 `conf-threshold` 设为 0.6。
+二者独立配置。需要更少检测框时可将 `--conf-threshold` 提高到 **0.6** 等。
 
 ## 15. 质量门控策略
 
@@ -248,7 +380,40 @@ MCAP Frame → Decode → Quality Analyzer
 | 输入 tensor | `float32 [1, 3, 640, 640]`, BGR→RGB, /255.0 归一化 |
 | 输出 tensor | `float32 [1, 84, 8400]` (YOLOv8 格式) |
 | 类别列表 | COCO 80 类 |
-| 推理后端 | ONNX Runtime CPU |
+| 推理后端 | ONNX Runtime（默认 CPU；可选 CUDA GPU / TensorRT） |
+
+### 18.1 推理设备（`--device cpu` / `--device gpu`）
+
+| 参数 | 说明 |
+|------|------|
+| `--device cpu` | **默认、必做**。使用 `onnxruntime`（CPU EP），无需 CUDA。报告与 `yolo_predictions.json` 中 `device` 为 `cpu`。 |
+| `--device gpu` | **加分**。使用 `onnxruntime-gpu` 的 CUDA EP；若环境不满足，会自动回退到 CPU 并在日志中警告。 |
+
+**GPU（`--device gpu`）环境要求**（与当前 `onnxruntime-gpu` 1.26.x 一致，以 [官方文档](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#requirements) 为准）：
+
+| 组件 | 版本要求 |
+|------|----------|
+| Python 包 | `pip install onnxruntime-gpu`（与 CPU 版二选一，勿同时装 `onnxruntime` 与 `onnxruntime-gpu`） |
+| CUDA | **12.x**（需 `cublasLt64_12.dll` 等在系统 `PATH` 中） |
+| cuDNN | **9.x** |
+| MSVC | 最新 Visual C++ 运行库（Windows） |
+| 显卡驱动 | 支持 CUDA 12 的 NVIDIA 驱动 |
+
+安装示例（Windows，需已安装 CUDA 12 + cuDNN 9）：
+
+```bash
+pip uninstall onnxruntime onnxruntime-gpu -y
+pip install onnxruntime-gpu>=1.26.0
+```
+
+验证 CUDA EP 是否生效：
+
+```bash
+python -c "import onnxruntime as ort; print(ort.get_available_providers())"
+# 期望输出包含 CUDAExecutionProvider
+```
+
+若缺少依赖，日志会出现 `Failed to create CUDAExecutionProvider` 并回退 CPU；此时请改用 `--device cpu`，或补齐上述依赖后重试。
 
 ### 前处理流程
 
@@ -265,7 +430,7 @@ MCAP Frame → Decode → Quality Analyzer
 
 1. 转置输出 tensor: (1, 84, 8400) → (8400, 84)
 2. 提取 cx, cy, w, h 和 80 个类别分数
-3. 置信度过滤（默认 0.6，可用 `--conf-threshold` 修改；作业示例 0.25）
+3. 置信度过滤（默认 **0.25**，可用 `--conf-threshold` 修改）
 4. xywh → xyxy
 5. 手写 NMS（IoU 阈值默认 0.45）
 6. bbox 坐标通过 letterbox 元数据映射回原图
@@ -275,9 +440,11 @@ MCAP Frame → Decode → Quality Analyzer
 
 默认关键目标：person, bicycle, car, motorcycle, bus, truck, traffic light, stop sign, dog, cat
 
+**选择原因：** 这些类别是机器人室内/室外导航场景中最常见的交互对象和障碍物。person 是安全相关的首要目标；car/truck/bus/motorcycle/bicycle 是道路场景核心障碍；traffic light/stop sign 影响导航决策；dog/cat 是常见小型移动障碍。均为 COCO 80 类中的高频类别，YOLOv8n 对这些类别有较好的检测能力。
+
 CLI 配置：`--target-classes person,car,truck,bus`
 
-只统计目标类别的检测结果，非关键类别在后处理阶段过滤。
+只统计目标类别的检测结果。若指定了 `--target-classes`，非关键类别在后处理阶段过滤；若未指定，则保留所有 80 类检测结果。
 
 ## 20. YOLO 后处理和 NMS
 
@@ -359,7 +526,9 @@ NMS 实现在 `app/yolo/nms.py`，手写实现：
 
 主要瓶颈在 YOLO ONNX CPU 推理（单帧约 15-50ms），其次是 JPEG 解码。抽帧采样是减少处理量的主要手段。可通过以下方式优化：
 - 增大 `--sample-every-n` 或使用 `--target-fps`
-- 使用 GPU（`--device gpu`，需 CUDA + onnxruntime-gpu）
+- 使用 GPU（`--device gpu`，需 CUDA 12 + cuDNN 9 + onnxruntime-gpu，见 §18.1）
+- 使用 TensorRT backend（`backend="tensorrt"`，需 TRT 引擎文件）
+- 使用 `infer_batch()` 进行批量推理
 - 使用更小的模型输入尺寸
 
 ## 25. 已知问题
@@ -368,20 +537,96 @@ NMS 实现在 `app/yolo/nms.py`，手写实现：
 2. 单帧预览 API 需遍历到目标帧，大文件时延迟较高
 3. 图片导出需要在 pipeline 中持有图像引用，内存占用与导出数量成正比
 
-## 26. 后续优化方向
+## 26. 加分项实现说明
 
-- TensorRT 加速推理（加分项）
-- Batch inference 支持（加分项）
-- Prometheus metrics 导出（加分项）
+### 26.0 加分项总览
+
+| # | 加分方向 | 对应要求 | 状态 | 实现位置 |
+|---|---------|---------|------|---------|
+| 1 | `--target-fps` 自动抽帧 | FR-MCAP-004 | 已完成 | `app/yolo/pipeline.py` |
+| 2 | CompressedImage PNG 支持 | FR-IMG-001 | 已完成 | `app/mcap_io/ros_image_decoder.py` |
+| 3 | Image 额外编码 (rgba8/bgra8/yuv422/16UC1) | FR-IMG-002 | 已完成 | `app/mcap_io/ros_image_decoder.py` |
+| 4 | 压缩图体积过小检测 | FR-QUALITY-001 | 已完成 | `app/quality/scoring.py` (`small_payload`) |
+| 5 | 时间戳异常检测 | FR-QUALITY-001 | 已完成 | `app/quality/scoring.py` (`timestamp_anomaly`) |
+| 6 | 重复帧 / 近重复帧检测 | FR-SEQ-003 | 已完成 | `app/quality/duplicate.py` (感知哈希) |
+| 7 | 单帧预览 API | FR-API-007 | 已完成 | `GET /mcap/frame` |
+| 8 | 单帧 YOLO 预览 API | FR-API-008 | 已完成 | `GET /mcap/frame_yolo` |
+| 9 | YOLO Batch Inference | NFR-002 | 已完成 | `app/yolo/onnx_runner.py` (`infer_batch`) |
+| 10 | TensorRT 推理 backend | 加分方向 | 已完成 | `app/yolo/trt_runner.py` |
+| 11 | GPU 推理 (`--device gpu`) | 加分方向 | 已完成 | `app/yolo/onnx_runner.py` (CUDA EP) |
+| 12 | Prometheus `/metrics` 端点 | 加分方向 | 已完成 | `app/api/metrics.py` |
+| 13 | 多相机质量趋势图 | 加分方向 | 已完成 | `app/report/html_report.py` (inline SVG) |
+| 14 | 前端 Dashboard | 加分方向 | 已完成 | `app/static/index.html` |
+
+### 26.1 TensorRT 加速推理
+
+- 实现文件：`app/yolo/trt_runner.py`、`app/yolo/runner_factory.py`
+- 支持 `.engine` / `.trt` 格式的序列化 TRT 引擎文件
+- 通过 `runner_factory.create_runner(backend="tensorrt")` 切换 backend
+- 需要安装 `tensorrt` 和 `pycuda` 包；未安装时优雅降级
+
+构建 TRT 引擎：
+```bash
+trtexec --onnx=yolov8n.onnx --saveEngine=yolov8n.engine --fp16
+```
+
+### 26.2 Batch Inference
+
+- `YoloOnnxRunner.infer_batch(images)` 支持批量推理
+- 当模型 batch 维度为动态（-1 或字符串）时，使用真正的 batch forward
+- 否则回退到逐帧推理
+- 延迟统计按帧平均分配
+
+### 26.3 Prometheus Metrics
+
+- 端点：`GET /metrics`
+- 格式：Prometheus text exposition format
+- 指标：`jobs_submitted_total`, `jobs_completed_total`, `jobs_failed_total`, `frames_sampled_total`, `frames_inferred_total`, `frames_skipped_quality_total`, `detections_total`, `uptime_seconds`
+- Worker 完成任务时自动更新计数器
+
+### 26.4 多相机质量趋势图
+
+- 在 `quality_report.html` 中自动生成内联 SVG 折线图
+- X 轴：帧序号；Y 轴：质量分（0-1）
+- 每个相机一条彩色折线，底部图例标注
+- 纯 SVG，无外部依赖
+
+### 26.5 前端 Dashboard (Pipeline Frame Reviewer)
+
+- 实现文件：`app/static/index.html`、`app/api/pipeline_review.py`
+- 浏览器访问 `http://localhost:8000/` 即可打开
+- 支持加载 CLI 流水线输出目录，浏览全部帧列表
+- 左侧多相机切换 + Bad/Detect 过滤
+- 中间查看原图，可切换 YOLO 检测框叠加（pipeline 预存 / 实时推理两种模式）
+- 右侧展示帧详细字段、检测对象、延迟信息
+- 支持 Windows 绝对路径、引号粘贴等多种路径格式
+
+### 26.6 GPU 推理
+
+- 通过 `--device gpu` 启用 ONNX Runtime CUDA Execution Provider
+- 环境不满足时自动回退 CPU 并在日志中警告
+- 报告和 `yolo_predictions.json` 中 `device` 字段会反映实际使用的设备
+- 详见 §18.1
+
+### 26.7 其他加分细节
+
+- **CompressedImage PNG**：`ros_image_decoder.py` 中根据 `format` 字段自动选择 JPEG/PNG 解码
+- **Image 额外编码**：支持 rgba8、bgra8、yuv422（YUV→BGR）、16UC1/32FC1（深度图→归一化灰度）
+- **压缩图体积过小**：`scoring.py` 中 `compressed_payload_size < 500 字节` 触发 `small_payload` 惩罚 0.15
+- **时间戳异常**：`scoring.py` 中根据帧级时间戳异常标记触发 `timestamp` 惩罚 0.05
+- **重复帧检测**：`duplicate.py` 使用 8×8 感知哈希（average hash），Hamming 距离 ≤ 5 判定为近重复，输出 `duplicate_frame_groups`
+
+## 27. 后续优化方向
+
 - WebSocket 实时进度推送
 - 分布式多文件并行处理
 
-## 27. 实际耗时与 AI 使用说明
+## 28. 实际耗时与 AI 使用说明
 
 ```
 实际开发耗时：约 30 小时
 是否使用 AI 工具：是
 AI 工具使用范围：代码生成辅助（部分模块框架代码）、文档撰写辅助、架构设计讨论、调试分析
 当前已知问题：见第 25 节
-未完成项：TensorRT 加速、Batch inference、Prometheus metrics（均为加分项）
+未完成项：代码侧必做/加分已实现；提交前请在 Ubuntu 执行 §6.1 `ubuntu_verify.sh` 完成 Docker 端到端验收
 ```

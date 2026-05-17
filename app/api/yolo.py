@@ -32,8 +32,7 @@ router = APIRouter(prefix="/mcap", tags=["preview"])
 
 _runner_cache: dict[str, YoloOnnxRunner] = {}
 
-# Project root for resolving relative MCAP paths regardless of uvicorn cwd
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+from app.core.paths import resolve_mcap_path
 
 _TIMESTAMP_TOLERANCE_NS = 500_000_000  # 500 ms — ros_stamp vs log_time can differ
 
@@ -48,19 +47,6 @@ class _DecodedFrame:
 
 def _is_image_schema(schema_name: str) -> bool:
     return schema_name in COMPRESSED_IMAGE_SCHEMAS or schema_name in RAW_IMAGE_SCHEMAS
-
-
-def _resolve_mcap_path(mcap_path: str) -> Path:
-    """Resolve MCAP path relative to cwd or project root."""
-    raw = mcap_path.strip().replace("\\", "/")
-    p = Path(raw)
-    if p.is_absolute() and p.is_file():
-        return p.resolve()
-    candidates = [Path.cwd() / raw, _PROJECT_ROOT / raw, _PROJECT_ROOT / "test_data" / p.name]
-    for c in candidates:
-        if c.is_file():
-            return c.resolve()
-    return p
 
 
 def _frame_timestamp_ns(frame, log_time_ns: int) -> int:
@@ -159,7 +145,7 @@ def _get_frame(
     timestamp_ns: Optional[int] = None,
     raw_frame_idx: Optional[int] = None,
 ) -> _DecodedFrame:
-    p = _resolve_mcap_path(mcap_path)
+    p = resolve_mcap_path(mcap_path)
     if not p.is_file():
         raise HTTPException(status_code=404, detail=f"MCAP not found: {mcap_path} (tried {p})")
 
@@ -360,7 +346,7 @@ def resolve_frame(
     timestamp_ns: int = Query(..., ge=1),
 ):
     """Map a pipeline timestamp to the raw message index on a topic (for timeline scrubbing)."""
-    decoded = _decode_by_timestamp(_resolve_mcap_path(mcap_path), topic, timestamp_ns)
+    decoded = _decode_by_timestamp(resolve_mcap_path(mcap_path), topic, timestamp_ns)
     return {
         "topic": topic,
         "timestamp_ns": decoded.timestamp_ns,
@@ -374,7 +360,7 @@ def get_topic_frames(
     topic: str = Query(...),
 ):
     """Return total frame count for a topic (for timeline)."""
-    p = _resolve_mcap_path(mcap_path)
+    p = resolve_mcap_path(mcap_path)
     if not p.is_file():
         raise HTTPException(status_code=404, detail=f"MCAP not found: {mcap_path}")
 

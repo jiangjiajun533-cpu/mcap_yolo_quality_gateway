@@ -36,7 +36,11 @@ def analyze_frame(frame: FrameRecord, quality_threshold: Optional[float] = None)
             mcap_file=frame.mcap_file,
             topic=frame.topic,
             frame_seq=frame.frame_seq,
-            timestamp_ns=frame.ros_stamp_ns or frame.log_time_ns,
+            timestamp_ns=frame.ros_stamp_ns or frame.publish_time_ns or frame.log_time_ns,
+            log_time_ns=frame.log_time_ns,
+            publish_time_ns=frame.publish_time_ns,
+            ros_stamp_ns=frame.ros_stamp_ns,
+            timestamp_source=frame.timestamp_source,
             width=frame.width,
             height=frame.height,
             is_corrupted=True,
@@ -81,6 +85,10 @@ def analyze_frame(frame: FrameRecord, quality_threshold: Optional[float] = None)
     result.topic = frame.topic
     result.frame_seq = frame.frame_seq
     result.timestamp_ns = frame.ros_stamp_ns or frame.publish_time_ns or frame.log_time_ns
+    result.log_time_ns = frame.log_time_ns
+    result.publish_time_ns = frame.publish_time_ns
+    result.ros_stamp_ns = frame.ros_stamp_ns
+    result.timestamp_source = frame.timestamp_source
 
     quality_ms = (time.perf_counter() - t0) * 1000.0
     logger.debug(
@@ -92,12 +100,15 @@ def analyze_frame(frame: FrameRecord, quality_threshold: Optional[float] = None)
 
 
 def quality_result_to_dict(result: QualityResult) -> dict:
-    """Serialize QualityResult to JSON-compatible dict (FR-QUALITY-001 format)."""
-    return {
+    """Serialize QualityResult to JSON-compatible dict (FR-QUALITY-001 + FR-IMG-003)."""
+    d = {
         "mcap_file": result.mcap_file,
         "topic": result.topic,
         "frame_seq": result.frame_seq,
         "timestamp_ns": result.timestamp_ns,
+        "log_time_ns": result.log_time_ns,
+        "ros_stamp_ns": result.ros_stamp_ns,
+        "timestamp_source": result.timestamp_source,
         "width": result.width,
         "height": result.height,
         "brightness_mean": result.brightness_mean,
@@ -117,3 +128,6 @@ def quality_result_to_dict(result: QualityResult) -> dict:
         "penalties": result.penalties,
         "is_bad_quality": result.is_bad_quality,
     }
+    if result.publish_time_ns is not None:
+        d["publish_time_ns"] = result.publish_time_ns
+    return d

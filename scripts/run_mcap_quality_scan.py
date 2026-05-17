@@ -100,89 +100,105 @@ def main() -> None:
     dup_detectors: dict[str, DuplicateDetector] = {}
     sample_images: dict[int, object] = {}
     combined_stats = PipelineStats()
+    batch_failures: list[dict[str, str]] = []
 
     wall_t0 = time.perf_counter()
 
     for mcap_path in mcap_paths:
-        logger.info(f"Processing {mcap_path.name} ...")
-        summary = read_mcap_summary(mcap_path)
-        all_summaries.append(summary)
+        try:
+            logger.info(f"Processing {mcap_path.name} ...")
+            summary = read_mcap_summary(mcap_path)
+            all_summaries.append(summary)
 
-        stats_out: list[PipelineStats] = []
-        for record in run_pipeline(
-            mcap_path=mcap_path,
-            topics=topics,
-            runner=None,
-            quality_threshold=args.quality_threshold,
-            target_fps=args.target_fps,
-            sample_every_n=args.sample_every_n,
-            start_sec=args.start_sec,
-            end_sec=args.end_sec,
-            max_frames=args.max_frames,
-            stats_out=stats_out,
-        ):
-            all_records.append(record)
+            stats_out: list[PipelineStats] = []
+            for record in run_pipeline(
+                mcap_path=mcap_path,
+                topics=topics,
+                runner=None,
+                quality_threshold=args.quality_threshold,
+                target_fps=args.target_fps,
+                sample_every_n=args.sample_every_n,
+                start_sec=args.start_sec,
+                end_sec=args.end_sec,
+                max_frames=args.max_frames,
+                stats_out=stats_out,
+            ):
+                all_records.append(record)
 
-            topic = record.topic
-            if topic not in dup_detectors:
-                dup_detectors[topic] = DuplicateDetector()
-            if record.image is not None:
-                dup_detectors[topic].update(record.image, record.frame_seq, record.timestamp_ns)
+                topic = record.topic
+                if topic not in dup_detectors:
+                    dup_detectors[topic] = DuplicateDetector()
+                if record.image is not None:
+                    dup_detectors[topic].update(record.image, record.frame_seq, record.timestamp_ns)
 
-            if record.image is not None:
-                sample_images[id(record)] = record.image
-                record.image = None  # free memory after capturing
+                if record.image is not None:
+                    sample_images[id(record)] = record.image
+                    record.image = None  # free memory after capturing
 
-            if topic not in all_topic_quality:
-                t_info = next((t for t in summary.image_topics if t.topic == topic), None)
-                tqs = TopicQualitySummary(
-                    topic=topic,
-                    message_type=t_info.message_type if t_info else "",
-                    total_frames=t_info.message_count if t_info else 0,
-                )
-                all_topic_quality[topic] = tqs
+                if topic not in all_topic_quality:
+                    t_info = next((t for t in summary.image_topics if t.topic == topic), None)
+                    tqs = TopicQualitySummary(
+                        topic=topic,
+                        message_type=t_info.message_type if t_info else "",
+                        total_frames=t_info.message_count if t_info else 0,
+                    )
+                    all_topic_quality[topic] = tqs
 
-            if topic not in all_seq_trackers:
-                all_seq_trackers[topic] = TopicSequenceTracker(topic=topic)
+                if topic not in all_seq_trackers:
+                    all_seq_trackers[topic] = TopicSequenceTracker(topic=topic)
 
-            tqs = all_topic_quality[topic]
-            if record.action == "decode_error":
-                tqs.add_decode_failure()
-            elif record.quality_score > 0 or record.action in ("quality_only", "skip_inference", "inferred"):
-                from app.quality.scoring import QualityResult
-                qr = QualityResult(
-                    mcap_file=record.mcap_file,
-                    topic=record.topic,
-                    frame_seq=record.frame_seq,
-                    timestamp_ns=record.timestamp_ns,
-                    quality_score=record.quality_score,
-                    quality_tags=record.quality_tags,
-                    penalties=record.quality_penalties,
-                    is_bad_quality=record.is_bad_quality,
-                )
-                tqs.add(qr, decode_ms=record.latency_ms.get("decode", 0.0))
+                tqs = all_topic_quality[topic]
+                if record.action == "decode_error":
+                    tqs.add_decode_failure()
+                elif record.quality is not None or record.quality_score > 0 or record.action in (
+                    "quality_only", "skip_inference", "inferred",
+                ):
+                    qr = record.quality
+                    if qr is None:
+                        from app.quality.scoring import QualityResult
+                        qr = QualityResult(
+                            mcap_file=record.mcap_file,
+                            topic=record.topic,
+                            frame_seq=record.frame_seq,
+                            timestamp_ns=record.timestamp_ns,
+                            log_time_ns=record.log_time_ns,
+                            publish_time_ns=record.publish_time_ns,
+                            ros_stamp_ns=record.ros_stamp_ns,
+                            timestamp_source=record.timestamp_source,
+                            quality_score=record.quality_score,
+                            quality_tags=record.quality_tags,
+                            penalties=record.quality_penalties,
+                            is_bad_quality=record.is_bad_quality,
+                        )
+                    tqs.add(qr, decode_ms=record.latency_ms.get("decode", 0.0))
+                    all_seq_trackers[topic].update(
+                        timestamp_ns=record.timestamp_ns,
+                        width=qr.width,
+                        height=qr.height,
+                    )
 
-                all_seq_trackers[topic].update(
-                    timestamp_ns=record.timestamp_ns,
-                    width=qr.width,
-                    height=qr.height,
-                )
-
-        if stats_out:
-            s = stats_out[0]
-            combined_stats.total_raw_frames += s.total_raw_frames
-            combined_stats.skipped_by_sampling += s.skipped_by_sampling
-            combined_stats.sampled_frames += s.sampled_frames
-            combined_stats.decode_failed += s.decode_failed
-            combined_stats.quality_analyzed += s.quality_analyzed
-            combined_stats.quality_passed += s.quality_passed
-            combined_stats.quality_failed += s.quality_failed
-            combined_stats.sampling_mode = s.sampling_mode
-            combined_stats.target_fps = s.target_fps
-            combined_stats.estimated_source_fps = s.estimated_source_fps
-            combined_stats.computed_sample_every_n = s.computed_sample_every_n
-            combined_stats.estimated_actual_fps = s.estimated_actual_fps
-            combined_stats.max_frames = s.max_frames
+            if stats_out:
+                s = stats_out[0]
+                combined_stats.total_raw_frames += s.total_raw_frames
+                combined_stats.skipped_by_sampling += s.skipped_by_sampling
+                combined_stats.sampled_frames += s.sampled_frames
+                combined_stats.decode_failed += s.decode_failed
+                combined_stats.quality_analyzed += s.quality_analyzed
+                combined_stats.quality_passed += s.quality_passed
+                combined_stats.quality_failed += s.quality_failed
+                combined_stats.sampling_mode = s.sampling_mode
+                combined_stats.target_fps = s.target_fps
+                combined_stats.estimated_source_fps = s.estimated_source_fps
+                combined_stats.computed_sample_every_n = s.computed_sample_every_n
+                combined_stats.estimated_actual_fps = s.estimated_actual_fps
+                combined_stats.max_frames = s.max_frames
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:
+            logger.exception("Failed processing MCAP %s", mcap_path)
+            batch_failures.append(
+                {"mcap_file": str(mcap_path.resolve()), "error": str(exc)}
+            )
 
     wall_sec = time.perf_counter() - wall_t0
 
@@ -192,14 +208,29 @@ def main() -> None:
 
     logger.info("Writing reports ...")
     write_mcap_summary(output_dir, all_summaries)
-    write_quality_report(output_dir, topic_summaries, seq_summaries, combined_stats, dup_results)
-    write_quality_html(output_dir, topic_summaries, seq_summaries, combined_stats, dup_results=dup_results)
+    write_quality_report(
+        output_dir, topic_summaries, seq_summaries, combined_stats, dup_results,
+        batch_failures=batch_failures or None,
+    )
+    write_quality_html(
+        output_dir, topic_summaries, seq_summaries, combined_stats,
+        dup_results=dup_results, batch_failures=batch_failures or None,
+    )
     write_quality_md(output_dir, topic_summaries, seq_summaries, combined_stats, dup_results=dup_results)
-    write_metrics(output_dir, combined_stats, all_records, wall_time_sec=wall_sec)
+    write_metrics(
+        output_dir, combined_stats, all_records,
+        wall_time_sec=wall_sec, batch_failures=batch_failures or None,
+    )
 
     if sample_images:
         export_bad_samples(output_dir, all_records, sample_images, max_samples=args.max_bad_samples)
 
+    if batch_failures:
+        logger.warning(
+            "Completed with %d failed MCAP file(s): %s",
+            len(batch_failures),
+            ", ".join(f["mcap_file"] for f in batch_failures),
+        )
     logger.info(
         f"Done. {combined_stats.sampled_frames} frames processed in {wall_sec:.1f}s. "
         f"Reports written to {output_dir}/"
@@ -207,4 +238,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        logger.warning("Interrupted by user (Ctrl+C). Partial outputs may exist.")
+        sys.exit(130)

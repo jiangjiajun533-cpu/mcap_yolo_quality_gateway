@@ -26,6 +26,7 @@ from app.report.json_report import (
 )
 from app.report.html_report import write_quality_html, write_yolo_html
 from app.report.markdown_report import write_quality_md, write_yolo_md
+from app.api.metrics import counters as prom_counters
 
 logger = get_logger("jobs.worker")
 
@@ -53,6 +54,8 @@ def _run_quality_scan(job: Job) -> None:
         quality_threshold=p.get("quality_threshold", 0.6),
         target_fps=p.get("target_fps", 0.0),
         sample_every_n=p.get("sample_every_n", 1),
+        start_sec=p.get("start_sec", 0.0),
+        end_sec=p.get("end_sec", 0.0),
         max_frames=p.get("max_frames", 0),
         stats_out=stats_out,
     ):
@@ -125,6 +128,8 @@ def _run_yolo_infer(job: Job) -> None:
         infer_low_quality=p.get("infer_low_quality", False),
         target_fps=p.get("target_fps", 0.0),
         sample_every_n=p.get("sample_every_n", 1),
+        start_sec=p.get("start_sec", 0.0),
+        end_sec=p.get("end_sec", 0.0),
         max_frames=p.get("max_frames", 0),
         skip_depth_topics_for_yolo=p.get(
             "skip_depth_topics_for_yolo", settings.skip_depth_topics_for_yolo
@@ -156,8 +161,15 @@ def _run_yolo_infer(job: Job) -> None:
     )
     write_yolo_predictions(output_dir, records, model_info=model_info)
     write_yolo_html(output_dir, stats, target_analyzer, model_info, perf)
-    write_yolo_md(output_dir, stats, target_analyzer, model_info, perf)
+    write_yolo_md(output_dir, stats, target_analyzer, model_info, perf, records=records)
     write_metrics(output_dir, stats, records, target_analyzer, wall_sec)
+
+    prom_counters.inc("jobs_completed_total")
+    prom_counters.inc("frames_sampled_total", stats.sampled_frames)
+    prom_counters.inc("frames_inferred_total", stats.infer_success_frames)
+    prom_counters.inc("frames_skipped_quality_total", stats.quality_failed_frames)
+    total_det = sum(len(r.objects) for r in records if r.action == "inferred")
+    prom_counters.inc("detections_total", total_det)
 
     job_manager.set_finished(
         job.job_id,
@@ -186,6 +198,13 @@ def _accumulate_quality(
     tqs = topic_quality[topic]
     if record.action == "decode_error":
         tqs.add_decode_failure()
+    elif record.quality is not None:
+        tqs.add(record.quality, decode_ms=record.latency_ms.get("decode", 0.0))
+        seq_trackers[topic].update(
+            timestamp_ns=record.timestamp_ns,
+            width=record.quality.width,
+            height=record.quality.height,
+        )
     else:
         qr = QualityResult(
             mcap_file=record.mcap_file,
@@ -200,7 +219,8 @@ def _accumulate_quality(
         tqs.add(qr, decode_ms=record.latency_ms.get("decode", 0.0))
         seq_trackers[topic].update(
             timestamp_ns=record.timestamp_ns,
-            width=qr.width, height=qr.height,
+            width=qr.width,
+            height=qr.height,
         )
 
 

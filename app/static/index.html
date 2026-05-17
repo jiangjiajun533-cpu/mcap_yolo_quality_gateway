@@ -127,9 +127,11 @@ input,select{font:inherit;color:var(--text);background:var(--card);border:1px so
 
 /* ── Empty state ── */
 #emptyState{grid-column:1/-1;grid-row:2;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;gap:12px;color:var(--dim);text-align:center;padding:40px}
-#emptyState h2{color:var(--text);font-size:20px;font-weight:500}
-#emptyState p{max-width:500px;font-size:13px;line-height:1.6}
+  justify-content:center;gap:16px;color:var(--dim);text-align:center;padding:48px 32px}
+#emptyState h2{color:var(--text);font-size:24px;font-weight:600}
+#emptyState p{max-width:560px;font-size:15px;line-height:1.75;color:#b1bac4}
+#emptyState p b{color:var(--text)}
+#emptyState code{font-size:14px;color:var(--accent);background:rgba(0,212,255,.08);padding:2px 6px;border-radius:4px}
 
 /* toast */
 #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:8px 20px;
@@ -147,12 +149,12 @@ input,select{font:inherit;color:var(--text);background:var(--card);border:1px so
     <span class="brand">RoboVision QA</span>
     <div class="bar-group">
       <label>MCAP:</label>
-      <input id="mcapInput" class="wide" type="text" placeholder="server path to .mcap file" spellcheck="false">
+      <input id="mcapInput" class="wide" type="text" placeholder="relative path under project root" spellcheck="false">
       <button class="btn-primary" onclick="loadMcap()">Load</button>
     </div>
     <div class="bar-group">
       <label>Results:</label>
-      <input id="outputInput" class="med" type="text" value="outputs/yolo_test_v2" spellcheck="false">
+      <input id="outputInput" class="med" type="text" placeholder="outputs/<run_name>" spellcheck="false">
       <button class="btn-primary" onclick="loadResults()">Load Results</button>
     </div>
     <div class="spacer"></div>
@@ -162,10 +164,11 @@ input,select{font:inherit;color:var(--text);background:var(--card);border:1px so
   <!-- Empty state (before load) -->
   <div id="emptyState">
     <h2>Pipeline Frame Reviewer</h2>
-    <p>1. Enter the MCAP file path and click <b>Load</b> to discover cameras.<br>
-       2. Enter the pipeline output directory and click <b>Load Results</b> to browse all processed frames.<br>
-       3. Click any frame to view its image and field data.</p>
-  </div>
+    <p>1. <b>Results</b>（必填）：点下方目录名可直接加载。<br>
+       2. <b>MCAP</b>（可选，需手动 Load）：不会自动填写；用于任意帧原图与画框。不填则仅有已导出的 bad/detection 缩略图。<br>
+       3. 报告链接在新标签打开，返回此页会自动恢复上次数据。</p>
+    <p id="pathHintsBlock" style="font-size:13px;line-height:2;background:rgba(255,255,255,.03);padding:10px 14px;border-radius:6px;border:1px solid var(--border)">正在从服务获取路径…</p>
+    </div>
 
   <!-- Sidebar (hidden until loaded) -->
   <aside id="sidebar" style="display:none">
@@ -186,9 +189,9 @@ input,select{font:inherit;color:var(--text);background:var(--card);border:1px so
     </div>
     <div class="report-links" id="reportLinks">
       <h3>Reports</h3>
-      <a id="linkQuality" href="#" target="_blank">Quality Report (HTML)</a>
-      <a id="linkYolo" href="#" target="_blank">YOLO Report (HTML)</a>
-      <a id="linkMetrics" href="#" target="_blank">metrics.json</a>
+      <a id="linkQuality" href="#" target="_blank" rel="noopener noreferrer">Quality Report (HTML)</a>
+      <a id="linkYolo" href="#" target="_blank" rel="noopener noreferrer">YOLO Report (HTML)</a>
+      <a id="linkMetrics" href="#" target="_blank" rel="noopener noreferrer">metrics.json</a>
     </div>
   </aside>
 
@@ -205,9 +208,9 @@ input,select{font:inherit;color:var(--text);background:var(--card);border:1px so
       </div>
       <div class="spacer"></div>
       <span class="center-label" id="camLabel">—</span>
-    </div>
+      </div>
     <div id="imageWrap">
-      <div id="imgSpinner"></div>
+            <div id="imgSpinner"></div>
       <img id="frameImg" alt="Frame">
       <div id="noFrame">Select a frame from the list</div>
     </div>
@@ -222,7 +225,7 @@ input,select{font:inherit;color:var(--text);background:var(--card);border:1px so
     <div class="rp-section" id="objectsSection" style="display:none">
       <h3>Detected Objects</h3>
       <div id="objectsList"></div>
-    </div>
+        </div>
     <div class="rp-section" id="latencySection" style="display:none">
       <h3>Latency (ms)</h3>
       <table class="field-table" id="latencyTable"><tbody></tbody></table>
@@ -233,6 +236,8 @@ input,select{font:inherit;color:var(--text);background:var(--card);border:1px so
 <div id="toast"></div>
 
 <script>
+const SESSION_KEY = 'robovision_qa_v1';
+
 const S = {
   mcapPath: '',
   outputDir: '',
@@ -240,16 +245,28 @@ const S = {
   cameraMeta: {},
   activeCam: '',
   predictions: [],
+  previewByKey: {},
+  imageSource: 'none', // 'mcap' | 'preview' | 'none'
   camFrames: [],
   filteredFrames: [],
   filter: 'all',
   activeIdx: -1,
   showYolo: false,
   imgBlobUrl: null,
+  resultsLoaded: false,
 };
 
 const $ = id => document.getElementById(id);
 const enc = s => encodeURIComponent(s);
+
+/** Strip quotes and normalize slashes (server resolves cwd / project root). */
+function normalizePath(s) {
+  let t = (s || '').trim();
+  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+    t = t.slice(1, -1).trim();
+  }
+  return t.replace(/\\/g, '/').replace(/\/+$/, '');
+}
 
 /** Left sidebar metrics.json — static file under /outputs/... */
 function metricsLinkUrl(outputDir) {
@@ -264,6 +281,161 @@ function toast(msg, type) {
   t.className = type ? 'show ' + type : 'show';
   clearTimeout(t._t);
   t._t = setTimeout(() => t.className = '', 3000);
+}
+
+function previewKey(p) {
+  return (p.topic || '') + '\0' + (p.frame_seq ?? '') + '\0' + (p.timestamp_ns ?? '');
+}
+
+function readSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveSession() {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({
+      mcapInput: $('mcapInput').value,
+      outputInput: $('outputInput').value,
+      mcapPath: S.mcapPath,
+      outputDir: S.outputDir,
+      resultsLoaded: S.resultsLoaded,
+      activeCam: S.activeCam,
+      activeIdx: S.activeIdx,
+      filter: S.filter,
+      showYolo: S.showYolo,
+    }));
+  } catch { /* private mode */ }
+}
+
+function applySessionInputs(snap) {
+  if (!snap) return;
+  if (snap.outputInput) $('outputInput').value = snap.outputInput;
+  if (snap.mcapInput) $('mcapInput').value = snap.mcapInput;
+  S.mcapPath = snap.mcapPath || '';
+  S.outputDir = snap.outputDir || '';
+}
+
+function shouldRestoreWorkspace() {
+  const snap = readSession();
+  return !!(snap && snap.resultsLoaded && snap.outputInput);
+}
+
+function restoreUiFromSession(snap) {
+  if (!snap || !S.predictions.length) return;
+  S.showYolo = !!snap.showYolo;
+  $('yoloBtn').classList.toggle('on', S.showYolo);
+  if (snap.filter) {
+    S.filter = snap.filter;
+    document.querySelectorAll('.filter-tab').forEach(b => {
+      b.classList.toggle('active', b.dataset.f === snap.filter);
+    });
+  }
+  const cam = snap.activeCam && S.cameras.includes(snap.activeCam)
+    ? snap.activeCam : S.cameras[0];
+  if (cam) {
+    S.activeCam = cam;
+    S.camFrames = S.predictions.filter(p => p.topic === cam);
+    S.camFrames.sort((a, b) => a.frame_seq - b.frame_seq);
+    $('camLabel').textContent = camLabel(cam);
+    applyFilter();
+    renderCameras();
+    const idx = typeof snap.activeIdx === 'number' ? snap.activeIdx : 0;
+    if (S.filteredFrames.length > 0) {
+      selectFrame(Math.min(Math.max(0, idx), S.filteredFrames.length - 1));
+    } else {
+      clearFrame();
+    }
+  }
+}
+
+async function restoreWorkspaceIfSaved() {
+  const snap = readSession();
+  if (!snap || !snap.resultsLoaded || !snap.outputInput) return false;
+  applySessionInputs(snap);
+  await loadResults({ restoreUi: true });
+  if (S.mcapPath && ($('mcapInput').value || '').trim()) {
+    await loadMcap();
+    restoreUiFromSession(readSession());
+  }
+  return true;
+}
+
+function guardReportLink(e, anchorId) {
+  const a = $(anchorId);
+  if (!a.href || a.href.endsWith('#')) {
+    e.preventDefault();
+    toast('Load Results first');
+  }
+  saveSession();
+}
+
+let _pathHints = null;
+
+async function loadPathHints() {
+  const el = $('pathHintsBlock');
+  try {
+    const r = await fetch('/path_hints');
+    if (!r.ok) throw new Error(String(r.status));
+    const h = await r.json();
+    _pathHints = h;
+
+    const env = h.in_docker ? '容器内' : '本机';
+    const root = h.project_root;
+    const outRoot = h.outputs_root;
+
+    const runList = (h.output_runs || []);
+    const mcapList = (h.mcap_files || []);
+
+    let html = '<b>服务运行环境：</b>' + env +
+      '&emsp;<b>项目根：</b><code>' + esc(root) + '</code><br>';
+
+    if (runList.length > 0) {
+      html += '<b>Results 可用目录（' + outRoot + '/…）：</b>';
+      html += runList.map(n =>
+        '<code style="cursor:pointer;color:var(--accent)" onclick="fillOutput(' + JSON.stringify(n) + ')">' +
+        esc(n) + '</code>'
+      ).join(' &nbsp; ');
+      html += '<br>';
+      $('outputInput').placeholder = outRoot + '/' + runList[0];
+    } else {
+      html += '<b>outputs/</b> 暂无子目录 — 请先运行 CLI/smoke 生成结果<br>';
+      $('outputInput').placeholder = outRoot + '/<run_name>';
+    }
+
+    if (mcapList.length > 0) {
+      const testDataPath = root + '/test_data';
+      html += '<b>MCAP 文件（' + testDataPath + '/…）：</b>';
+      html += mcapList.map(n =>
+        '<code style="cursor:pointer;color:var(--accent)" onclick="fillMcap(' + JSON.stringify(n) + ')">' +
+        esc(n) + '</code>'
+      ).join(' &nbsp; ');
+      $('mcapInput').placeholder = 'test_data/' + mcapList[0];
+    } else {
+      html += '<b>test_data/</b> 暂无 .mcap — 请先放入或生成 MCAP 文件';
+      $('mcapInput').placeholder = 'test_data/<file>.mcap';
+    }
+
+    el.innerHTML = html;
+  } catch(e) {
+    el.textContent = '无法获取服务路径（/path_hints 不可达）';
+  }
+}
+
+function fillOutput(runName) {
+  const root = _pathHints ? _pathHints.outputs_root : 'outputs';
+  $('outputInput').value = root + '/' + runName;
+  saveSession();
+  loadResults();
+}
+
+function fillMcap(fname) {
+  const root = _pathHints ? _pathHints.project_root : '';
+  $('mcapInput').value = (root ? root + '/test_data/' : 'test_data/') + fname;
+  saveSession();
+  loadMcap();
 }
 
 function camLabel(topic) {
@@ -283,34 +455,26 @@ function showUI() {
   $('rightPanel').style.display = 'block';
 }
 
-/** Try common server paths from pipeline mcap_file (e.g. sample.mcap → test_data/sample.mcap). */
-async function ensureMcapPath() {
-  if (S.mcapPath) return true;
-  const preds = S.predictions || [];
-  if (!preds.length) return false;
-  const name = (preds.find(p => p.mcap_file) || {}).mcap_file || '';
-  if (!name) return false;
-  const candidates = ['test_data/' + name, name, '../' + name];
-  for (const path of candidates) {
-    try {
-      const r = await fetch('/mcap/inspect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mcap_path: path }),
-      });
-      if (!r.ok) continue;
-      S.mcapPath = path;
-      $('mcapInput').value = path;
-      return true;
-    } catch { /* try next */ }
-  }
-  return false;
+function buildPreviewIndex(data) {
+  S.previewByKey = {};
+  const lists = [].concat(data.bad_frames || [], data.detection_frames || []);
+  lists.forEach(f => {
+    if (f.preview_url) S.previewByKey[previewKey(f)] = f.preview_url;
+  });
+}
+
+function imageSourceLabel() {
+  const nPrev = Object.keys(S.previewByKey).length;
+  if (S.mcapPath) return 'MCAP（任意帧可看）';
+  if (nPrev > 0) return '已导出缩略图 ' + nPrev + ' 帧（仅 bad/detection）';
+  return '仅元数据（无图）';
 }
 
 /* ── Load MCAP ── */
 async function loadMcap() {
-  const path = $('mcapInput').value.trim();
+  const path = normalizePath($('mcapInput').value);
   if (!path) { toast('Enter MCAP path'); return; }
+  $('mcapInput').value = path;
   S.mcapPath = path;
   try {
     const r = await fetch('/mcap/inspect', {
@@ -332,6 +496,7 @@ async function loadMcap() {
     $('statusBar').innerHTML = '<b>' + (d.mcap_file || path.split(/[\\/]/).pop()) +
       '</b> · ' + S.cameras.length + ' cameras · ' + (d.duration_sec ? d.duration_sec.toFixed(1) + 's' : '');
     renderCameras();
+    saveSession();
     toast('MCAP loaded: ' + S.cameras.length + ' cameras', 'success');
   } catch (e) {
     toast('Load failed: ' + e.message, 'error');
@@ -339,14 +504,32 @@ async function loadMcap() {
 }
 
 /* ── Load Pipeline Results ── */
-async function loadResults() {
-  const dir = $('outputInput').value.trim();
+async function loadResults(options = {}) {
+  const dir = normalizePath($('outputInput').value);
   if (!dir) { toast('Enter output directory'); return; }
   S.outputDir = dir;
+  const snap = options.restoreUi ? readSession() : null;
   try {
     const r = await fetch('/pipeline/review_index?output_dir=' + enc(dir));
-    if (!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || r.status);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      const detail = err.detail;
+      const msg = typeof detail === 'string' ? detail : (Array.isArray(detail) ? detail.map(d => d.msg || d).join('; ') : r.status);
+      throw new Error(msg || String(r.status));
+    }
     const data = await r.json();
+    if (data.output_dir_display) {
+      $('outputInput').value = data.output_dir_display;
+      S.outputDir = data.output_dir_display;
+    }
+
+    buildPreviewIndex(data);
+    // Do not auto-fill MCAP — user must load MCAP explicitly for live frame images
+    if (!($('mcapInput').value || '').trim()) {
+      S.mcapPath = '';
+    } else {
+      S.mcapPath = normalizePath($('mcapInput').value);
+    }
 
     // Load full predictions
     S.predictions = data.predictions || [];
@@ -367,21 +550,28 @@ async function loadResults() {
     showUI();
     renderCameras();
 
-    await ensureMcapPath();
-
-    // Auto-select first camera
-    if (S.cameras.length > 0 && !S.activeCam) {
+    if (options.restoreUi && snap) {
+      restoreUiFromSession(snap);
+    } else if (S.cameras.length > 0 && !S.activeCam) {
       selectCamera(S.cameras[0]);
-    } else if (S.activeIdx >= 0 && S.mcapPath) {
+    } else if (S.activeIdx >= 0 && S.mcapPath && S.filteredFrames[S.activeIdx]) {
       loadImage(S.filteredFrames[S.activeIdx]);
     }
 
     const totalBad = S.predictions.filter(p => isBad(p)).length;
     const totalDet = S.predictions.filter(p => hasDet(p)).length;
+    S.resultsLoaded = true;
     $('statusBar').innerHTML = '<b>' + S.predictions.length + ' frames</b> loaded · ' +
       '<span style="color:var(--red)">' + totalBad + ' bad</span> · ' +
-      '<span style="color:var(--green)">' + totalDet + ' with detections</span>';
-    toast('Results loaded: ' + S.predictions.length + ' frames', 'success');
+      '<span style="color:var(--green)">' + totalDet + ' with detections</span> · ' +
+      'Image: <b>' + imageSourceLabel() + '</b>';
+    saveSession();
+    const prevN = Object.keys(S.previewByKey).length;
+    let hint = 'Results loaded: ' + S.predictions.length + ' frames';
+    if (!S.mcapPath && prevN > 0) {
+      hint += ' — ' + prevN + ' exported thumbnails (fill MCAP for every frame)';
+    }
+    if (!options.restoreUi) toast(hint, 'success');
   } catch (e) {
     toast('Load results failed: ' + e.message, 'error');
   }
@@ -435,6 +625,7 @@ function selectCamera(topic) {
   } else {
     clearFrame();
   }
+  saveSession();
 }
 
 /* ── Filter ── */
@@ -444,6 +635,7 @@ function setFilter(f) {
   applyFilter();
   if (S.filteredFrames.length > 0) selectFrame(0);
   else clearFrame();
+  saveSession();
 }
 
 function applyFilter() {
@@ -507,15 +699,11 @@ function selectFrame(idx) {
 
   // Render fields
   renderFields(p);
+  saveSession();
 }
 
 async function loadImage(p) {
-  if (!S.mcapPath) {
-    $('noFrame').style.display = 'block';
-    $('noFrame').textContent = 'Load MCAP first to view frame images';
-    $('frameImg').style.display = 'none';
-    return;
-  }
+  const previewUrl = S.previewByKey[previewKey(p)];
   const img = $('frameImg');
   const spinner = $('imgSpinner');
   $('noFrame').style.display = 'none';
@@ -536,6 +724,22 @@ async function loadImage(p) {
   };
 
   try {
+    // No MCAP: show exported thumbnail if available, else explain clearly
+    if (!S.mcapPath) {
+      if (previewUrl && !S.showYolo) {
+        $('yoloBtn').textContent = 'Show Boxes';
+        img.onload = onOk;
+        img.onerror = () => onErr('已导出缩略图文件缺失（重新运行 CLI 可重建）');
+        img.src = previewUrl + (previewUrl.includes('?') ? '&' : '?') + '_t=' + Date.now();
+        return;
+      }
+      if (previewUrl && S.showYolo) {
+        onErr('叠加检测框需要填入 MCAP 路径');
+        return;
+      }
+      onErr('此帧无导出缩略图。如需查看原图请填入 MCAP 路径。');
+      return;
+    }
     if (S.showYolo && p.objects && p.objects.length > 0) {
       $('yoloBtn').textContent = 'Boxes ON (pipeline)';
       const r = await fetch('/mcap/draw_frame', {
@@ -708,6 +912,7 @@ function toggleYolo() {
   $('yoloBtn').classList.toggle('on', S.showYolo);
   if (S.activeIdx >= 0) loadImage(S.filteredFrames[S.activeIdx]);
   else if (!S.showYolo) $('yoloBtn').textContent = 'Show Boxes';
+  saveSession();
 }
 
 /* ── Keyboard ── */
@@ -725,36 +930,31 @@ function esc(s) {
 }
 
 /* ── Init ── */
+$('linkQuality').addEventListener('click', e => guardReportLink(e, 'linkQuality'));
+$('linkYolo').addEventListener('click', e => guardReportLink(e, 'linkYolo'));
+$('linkMetrics').addEventListener('click', e => guardReportLink(e, 'linkMetrics'));
+
 $('mcapInput').addEventListener('keydown', e => { if (e.key === 'Enter') loadMcap(); });
 $('outputInput').addEventListener('keydown', e => { if (e.key === 'Enter') loadResults(); });
+$('mcapInput').addEventListener('input', () => {
+  S.mcapPath = normalizePath($('mcapInput').value);
+  saveSession();
+});
+$('outputInput').addEventListener('input', () => saveSession());
 
-(async function autoLoad() {
-  try {
-    const r = await fetch('/pipeline/review_index?output_dir=outputs/yolo_test_v2');
-    if (!r.ok) return;
-    const data = await r.json();
-    if (data.predictions && data.predictions.length > 0) {
-      S.outputDir = 'outputs/yolo_test_v2';
-      S.predictions = data.predictions;
-      const topicSet = new Set();
-      S.predictions.forEach(p => topicSet.add(p.topic));
-      S.cameras = Array.from(topicSet).sort();
-      if (data.report_urls) {
-        $('linkQuality').href = data.report_urls.quality_html;
-        $('linkYolo').href = data.report_urls.yolo_html;
-      }
-      $('linkMetrics').href = metricsLinkUrl('outputs/yolo_test_v2');
-      showUI();
-      renderCameras();
-      await ensureMcapPath();
-      if (S.cameras.length > 0) selectCamera(S.cameras[0]);
-      const totalBad = S.predictions.filter(isBad).length;
-      const totalDet = S.predictions.filter(hasDet).length;
-      $('statusBar').innerHTML = '<b>' + S.predictions.length + ' frames</b> auto-loaded · ' +
-        '<span style="color:var(--red)">' + totalBad + ' bad</span> · ' +
-        '<span style="color:var(--green)">' + totalDet + ' with detections</span>';
-    }
-  } catch { /* no default data available */ }
+window.addEventListener('pagehide', () => saveSession());
+window.addEventListener('pageshow', (evt) => {
+  if (evt.persisted && shouldRestoreWorkspace()) restoreWorkspaceIfSaved();
+});
+
+loadPathHints();
+
+(async function initDashboard() {
+  if (shouldRestoreWorkspace()) {
+    await restoreWorkspaceIfSaved();
+  } else {
+    applySessionInputs(readSession());
+  }
 })();
 </script>
 

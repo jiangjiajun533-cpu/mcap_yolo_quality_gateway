@@ -7,7 +7,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
 echo "=== Step 1: Generate test MCAP ==="
-python scripts/generate_test_mcap.py --output test_data/sample.mcap --frames 50 --fps 30
+python scripts/generate_test_mcap.py --output test_data/synthetic.mcap --frames 50 --fps 30
 
 echo ""
 echo "=== Step 2: Quality scan ==="
