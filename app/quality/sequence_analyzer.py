@@ -2,6 +2,7 @@
 Video sequence quality analysis per topic (FR-SEQ-001, FR-SEQ-002).
 Detects: frame-rate estimation, timestamp jumps, long gaps, resolution changes.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -18,8 +19,9 @@ logger = get_logger("quality.sequence_analyzer")
 @dataclass
 class SequenceWarning:
     """A single sequence-level warning event."""
-    level: str          # "warn" | "error"
-    code: str           # e.g. FRAME_TIME_GAP, TIMESTAMP_JUMP, RESOLUTION_CHANGED
+
+    level: str  # "warn" | "error"
+    code: str  # e.g. FRAME_TIME_GAP, TIMESTAMP_JUMP, RESOLUTION_CHANGED
     topic: str
     message: str
     timestamp_ns: int
@@ -28,6 +30,7 @@ class SequenceWarning:
 @dataclass
 class SequenceSummary:
     """Per-topic video sequence statistics (FR-SEQ-001, FR-SEQ-002)."""
+
     topic: str
     duration_sec: float = 0.0
     total_frames: int = 0
@@ -57,7 +60,9 @@ class TopicSequenceTracker:
     ):
         self.topic = topic
         self.gap_threshold_ms = gap_threshold_ms or settings.frame_gap_threshold_ms
-        self.jump_threshold_ms = jump_threshold_ms or settings.timestamp_jump_threshold_ms
+        self.jump_threshold_ms = (
+            jump_threshold_ms or settings.timestamp_jump_threshold_ms
+        )
 
         self._timestamps_ns: List[int] = []
         self._resolutions: List[Tuple[int, int]] = []
@@ -75,17 +80,19 @@ class TopicSequenceTracker:
             self._resolutions.append(res)
         elif res != self._current_resolution:
             self._resolution_change_count += 1
-            self._warnings.append(SequenceWarning(
-                level="warn",
-                code="RESOLUTION_CHANGED",
-                topic=self.topic,
-                message=(
-                    f"resolution changed from "
-                    f"{self._current_resolution[0]}x{self._current_resolution[1]} "
-                    f"to {res[0]}x{res[1]}"
-                ),
-                timestamp_ns=timestamp_ns,
-            ))
+            self._warnings.append(
+                SequenceWarning(
+                    level="warn",
+                    code="RESOLUTION_CHANGED",
+                    topic=self.topic,
+                    message=(
+                        f"resolution changed from "
+                        f"{self._current_resolution[0]}x{self._current_resolution[1]} "
+                        f"to {res[0]}x{res[1]}"
+                    ),
+                    timestamp_ns=timestamp_ns,
+                )
+            )
             self._current_resolution = res
             if res not in self._resolutions:
                 self._resolutions.append(res)
@@ -124,38 +131,44 @@ class TopicSequenceTracker:
         long_gap_mask = intervals_ms > self.gap_threshold_ms
         for idx in np.where(long_gap_mask)[0]:
             summary.long_gap_count += 1
-            self._warnings.append(SequenceWarning(
-                level="warn",
-                code="FRAME_TIME_GAP",
-                topic=self.topic,
-                message=(
-                    f"frame interval {intervals_ms[idx]:.0f}ms is larger than "
-                    f"threshold {self.gap_threshold_ms:.0f}ms"
-                ),
-                timestamp_ns=int(ts_sorted[idx + 1]),
-            ))
+            self._warnings.append(
+                SequenceWarning(
+                    level="warn",
+                    code="FRAME_TIME_GAP",
+                    topic=self.topic,
+                    message=(
+                        f"frame interval {intervals_ms[idx]:.0f}ms is larger than "
+                        f"threshold {self.gap_threshold_ms:.0f}ms"
+                    ),
+                    timestamp_ns=int(ts_sorted[idx + 1]),
+                )
+            )
 
         # Detect timestamp jumps (backwards or large forward)
         raw_intervals = np.diff(ts).astype(np.float64) / 1e6  # preserve original order
         for i, iv in enumerate(raw_intervals):
             if iv < 0:
                 summary.timestamp_jump_count += 1
-                self._warnings.append(SequenceWarning(
-                    level="warn",
-                    code="TIMESTAMP_BACKWARD",
-                    topic=self.topic,
-                    message=f"timestamp went backward by {abs(iv):.1f}ms",
-                    timestamp_ns=int(ts[i + 1]),
-                ))
+                self._warnings.append(
+                    SequenceWarning(
+                        level="warn",
+                        code="TIMESTAMP_BACKWARD",
+                        topic=self.topic,
+                        message=f"timestamp went backward by {abs(iv):.1f}ms",
+                        timestamp_ns=int(ts[i + 1]),
+                    )
+                )
             elif iv > self.jump_threshold_ms:
                 summary.timestamp_jump_count += 1
-                self._warnings.append(SequenceWarning(
-                    level="warn",
-                    code="TIMESTAMP_JUMP",
-                    topic=self.topic,
-                    message=f"timestamp jumped forward {iv:.0f}ms",
-                    timestamp_ns=int(ts[i + 1]),
-                ))
+                self._warnings.append(
+                    SequenceWarning(
+                        level="warn",
+                        code="TIMESTAMP_JUMP",
+                        topic=self.topic,
+                        message=f"timestamp jumped forward {iv:.0f}ms",
+                        timestamp_ns=int(ts[i + 1]),
+                    )
+                )
 
         return summary
 

@@ -19,6 +19,7 @@ Sampled frames: decode → quality → gate → YOLO.
 All quality statistics are reported over sampled frames only.
 max_frames limits sampled frames, not raw frames.
 """
+
 from __future__ import annotations
 
 import time
@@ -49,6 +50,7 @@ logger = get_logger("yolo.pipeline")
 # ---------------------------------------------------------------------------
 # Sampling helpers
 # ---------------------------------------------------------------------------
+
 
 def compute_sample_n(
     target_fps: float,
@@ -89,12 +91,14 @@ def compute_sample_n(
 # Pipeline stats
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PipelineStats:
     """
     Counts for each layer of the pipeline.
     Quality stats are scoped to sampled frames only.
     """
+
     # Raw level
     total_raw_frames: int = 0
     skipped_by_sampling: int = 0
@@ -189,13 +193,15 @@ class PipelineStats:
 # Inference record (FR-YOLO-006 + FR-YOLO-007)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class InferenceRecord:
     """Single-frame output record (FR-YOLO-006)."""
+
     mcap_file: str = ""
     topic: str = ""
-    frame_seq: int = 0       # sequential index within sampled frames for this topic
-    raw_frame_idx: int = 0   # original message index in the MCAP topic (before sampling)
+    frame_seq: int = 0  # sequential index within sampled frames for this topic
+    raw_frame_idx: int = 0  # original message index in the MCAP topic (before sampling)
     timestamp_ns: int = 0
     # FR-IMG-003
     log_time_ns: int = 0
@@ -256,6 +262,7 @@ class InferenceRecord:
 # Progress tracker (single-line, works in both TTY and pipe/non-TTY)
 # ---------------------------------------------------------------------------
 
+
 class _ProgressTracker:
     """
     Single-line progress on Unix/macOS TTY; on Windows PowerShell use sparse lines
@@ -277,17 +284,14 @@ class _ProgressTracker:
 
     def update(self, postfix: str = "") -> None:
         self._done += 1
-        pct = int(self._done * 100 / self._total)
+        pct = min(100, int(self._done * 100 / self._total))
         now = time.perf_counter()
         elapsed = now - self._t0
         fps = self._done / elapsed if elapsed > 0 else 0
 
         if self._sparse:
             step = self._INTERVAL_PCT
-            if (
-                pct // step > self._last_pct_shown // step
-                or self._done >= self._total
-            ):
+            if pct // step > self._last_pct_shown // step or self._done >= self._total:
                 self._last_pct_shown = pct
                 self._emit(pct, fps, postfix)
             return
@@ -334,6 +338,7 @@ class _ProgressTracker:
 # ---------------------------------------------------------------------------
 # Main pipeline iterator
 # ---------------------------------------------------------------------------
+
 
 def run_pipeline(
     mcap_path: str | Path,
@@ -384,7 +389,11 @@ def run_pipeline(
         abs_start_ns = summary.start_time_ns + int(start_sec * 1e9)
     if end_sec > 0:
         abs_end_ns = summary.start_time_ns + int(end_sec * 1e9)
-    if abs_start_ns is not None and abs_end_ns is not None and abs_start_ns >= abs_end_ns:
+    if (
+        abs_start_ns is not None
+        and abs_end_ns is not None
+        and abs_start_ns >= abs_end_ns
+    ):
         raise ValueError(
             f"--start-sec ({start_sec}) must be less than --end-sec ({end_sec})"
         )
@@ -449,12 +458,14 @@ def run_pipeline(
     last_ts_ns: dict[str, int] = {}
     total_sampled = 0
 
-    # Estimate total sampled frames for progress bar
+    # Estimate total sampled frames for progress bar (ceil: indices 0, n, 2n, ...)
     expected_sampled = 0
     for t_info in summary.image_topics:
         if t_info.topic in topics:
-            n = topic_n.get(t_info.topic, avg_n)
-            expected_sampled += t_info.message_count // max(1, n)
+            n = max(1, topic_n.get(t_info.topic, avg_n))
+            mc = t_info.message_count
+            if mc > 0:
+                expected_sampled += (mc + n - 1) // n
     if max_frames > 0:
         expected_sampled = min(expected_sampled, max_frames)
 
@@ -471,7 +482,10 @@ def run_pipeline(
         schema_name = schema.name
 
         # Skip unknown schemas without crashing
-        if schema_name not in COMPRESSED_IMAGE_SCHEMAS and schema_name not in RAW_IMAGE_SCHEMAS:
+        if (
+            schema_name not in COMPRESSED_IMAGE_SCHEMAS
+            and schema_name not in RAW_IMAGE_SCHEMAS
+        ):
             logger.debug(f"Skipping non-image schema {schema_name} on {topic}")
             continue
 
@@ -498,9 +512,15 @@ def run_pipeline(
         stats.sampled_frames += 1
         total_sampled += 1
         log_time_ns = message.log_time
-        if stats.processed_start_time_ns is None or log_time_ns < stats.processed_start_time_ns:
+        if (
+            stats.processed_start_time_ns is None
+            or log_time_ns < stats.processed_start_time_ns
+        ):
             stats.processed_start_time_ns = log_time_ns
-        if stats.processed_end_time_ns is None or log_time_ns > stats.processed_end_time_ns:
+        if (
+            stats.processed_end_time_ns is None
+            or log_time_ns > stats.processed_end_time_ns
+        ):
             stats.processed_end_time_ns = log_time_ns
 
         record = InferenceRecord(
@@ -542,9 +562,7 @@ def run_pipeline(
         record.log_time_ns = frame.log_time_ns
         record.publish_time_ns = frame.publish_time_ns
         record.ros_stamp_ns = frame.ros_stamp_ns
-        record.timestamp_ns = (
-            frame.ros_stamp_ns or frame.publish_time_ns or log_time_ns
-        )
+        record.timestamp_ns = frame.ros_stamp_ns or frame.publish_time_ns or log_time_ns
         record.timestamp_source = frame.timestamp_source
 
         # Per-frame timestamp anomaly (reversed or >10s gap)
@@ -590,7 +608,9 @@ def run_pipeline(
             record.objects = []
             record.latency_ms = _build_latency(decode_ms, quality_ms)
             record.image = frame.image
-            _progress.update(f"ok={stats.quality_passed} bad={stats.quality_failed} skip={stats.skipped_low_quality}")
+            _progress.update(
+                f"ok={stats.quality_passed} bad={stats.quality_failed} skip={stats.skipped_low_quality}"
+            )
             yield record
 
         elif skip_depth_yolo and is_depth_image_topic(topic):
@@ -616,13 +636,14 @@ def run_pipeline(
                 if detections or qr.is_bad_quality:
                     record.image = frame.image
                 record.latency_ms = {
-                    "decode":      decode_ms,
-                    "quality":     quality_ms,
-                    "preprocess":  yolo_lat["preprocess_ms"],
-                    "inference":   yolo_lat["inference_ms"],
+                    "decode": decode_ms,
+                    "quality": quality_ms,
+                    "preprocess": yolo_lat["preprocess_ms"],
+                    "inference": yolo_lat["inference_ms"],
                     "postprocess": yolo_lat["postprocess_ms"],
                     "total": round(
-                        decode_ms + quality_ms
+                        decode_ms
+                        + quality_ms
                         + yolo_lat["preprocess_ms"]
                         + yolo_lat["inference_ms"]
                         + yolo_lat["postprocess_ms"],
@@ -635,7 +656,8 @@ def run_pipeline(
                 record.action = "infer_error"
                 record.reason = str(exc)
                 record.latency_ms = _build_latency(
-                    decode_ms, quality_ms,
+                    decode_ms,
+                    quality_ms,
                     yolo_ms=round((time.perf_counter() - t2) * 1000, 2),
                 )
             _progress.update(
@@ -670,11 +692,15 @@ def run_pipeline(
 # Latency helpers
 # ---------------------------------------------------------------------------
 
+
 def _zero_latency(decode_ms: float = 0.0) -> dict:
     return {
-        "decode": decode_ms, "quality": 0.0,
-        "preprocess": 0.0, "inference": 0.0,
-        "postprocess": 0.0, "total": decode_ms,
+        "decode": decode_ms,
+        "quality": 0.0,
+        "preprocess": 0.0,
+        "inference": 0.0,
+        "postprocess": 0.0,
+        "total": decode_ms,
     }
 
 
@@ -688,10 +714,10 @@ def _build_latency(
 ) -> dict:
     pre = preprocess_ms or yolo_ms
     return {
-        "decode":      decode_ms,
-        "quality":     quality_ms,
-        "preprocess":  pre,
-        "inference":   inference_ms,
+        "decode": decode_ms,
+        "quality": quality_ms,
+        "preprocess": pre,
+        "inference": inference_ms,
         "postprocess": postprocess_ms,
-        "total":       round(decode_ms + quality_ms + pre + inference_ms + postprocess_ms, 2),
+        "total": round(decode_ms + quality_ms + pre + inference_ms + postprocess_ms, 2),
     }

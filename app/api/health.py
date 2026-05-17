@@ -1,4 +1,5 @@
 """GET /health endpoint (FR-API-002)."""
+
 from __future__ import annotations
 
 from pathlib import Path

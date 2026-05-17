@@ -2,6 +2,7 @@
 Hand-written Non-Maximum Suppression (FR-YOLO-004).
 No cv2.dnn or external NMS — implements IoU from scratch as required.
 """
+
 from __future__ import annotations
 
 from typing import List, Tuple
@@ -9,8 +10,9 @@ from typing import List, Tuple
 import numpy as np
 
 
-def compute_iou(box_a: Tuple[float, float, float, float],
-                box_b: Tuple[float, float, float, float]) -> float:
+def compute_iou(
+    box_a: Tuple[float, float, float, float], box_b: Tuple[float, float, float, float]
+) -> float:
     """
     Compute IoU of two bboxes given as (x1, y1, x2, y2).
     Returns value in [0, 1].
@@ -37,8 +39,8 @@ def compute_iou(box_a: Tuple[float, float, float, float],
 
 
 def nms(
-    boxes: np.ndarray,       # (N, 4)  float, x1y1x2y2
-    scores: np.ndarray,      # (N,)    float, confidence
+    boxes: np.ndarray,  # (N, 4)  float, x1y1x2y2
+    scores: np.ndarray,  # (N,)    float, confidence
     iou_threshold: float = 0.45,
 ) -> List[int]:
     """
@@ -76,9 +78,9 @@ def nms(
 
 
 def batched_nms(
-    boxes: np.ndarray,       # (N, 4)
-    scores: np.ndarray,      # (N,)
-    class_ids: np.ndarray,   # (N,)  int
+    boxes: np.ndarray,  # (N, 4)
+    scores: np.ndarray,  # (N,)
+    class_ids: np.ndarray,  # (N,)  int
     iou_threshold: float = 0.45,
 ) -> List[int]:
     """

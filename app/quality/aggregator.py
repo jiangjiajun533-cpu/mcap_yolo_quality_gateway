@@ -2,6 +2,7 @@
 Per-topic quality aggregator (FR-QUALITY-003).
 Collects QualityResult objects and produces the per-topic summary dict.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -15,10 +16,11 @@ from app.quality.scoring import QualityResult
 @dataclass
 class TopicQualitySummary:
     """Aggregated quality stats for one Topic (FR-QUALITY-003)."""
+
     topic: str
     message_type: str = ""
-    total_frames: int = 0        # original message count in MCAP
-    processed_frames: int = 0   # actually decoded + analyzed
+    total_frames: int = 0  # original message count in MCAP
+    processed_frames: int = 0  # actually decoded + analyzed
     decode_failed_frames: int = 0
     bad_quality_frames: int = 0
 

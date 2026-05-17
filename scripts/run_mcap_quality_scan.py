@@ -50,18 +50,34 @@ def _parse_args() -> argparse.Namespace:
     g.add_argument("--mcap", type=str, help="Path to a single MCAP file")
     g.add_argument("--mcap-dir", type=str, help="Directory containing MCAP files")
 
-    p.add_argument("--topics", type=str, default=None,
-                   help="Comma-separated topic names (overrides auto-detect)")
-    p.add_argument("--auto-detect-topics", type=str, default="true",
-                   help="Auto-detect image topics (true/false)")
+    p.add_argument(
+        "--topics",
+        type=str,
+        default=None,
+        help="Comma-separated topic names (overrides auto-detect)",
+    )
+    p.add_argument(
+        "--auto-detect-topics",
+        type=str,
+        default="true",
+        help="Auto-detect image topics (true/false)",
+    )
     p.add_argument("--sample-every-n", type=int, default=1)
-    p.add_argument("--target-fps", type=float, default=0.0,
-                   help="Target FPS for sampling (bonus, 0=disabled)")
+    p.add_argument(
+        "--target-fps",
+        type=float,
+        default=0.0,
+        help="Target FPS for sampling (bonus, 0=disabled)",
+    )
     p.add_argument("--quality-threshold", type=float, default=0.6)
     p.add_argument("--start-sec", type=float, default=0.0)
     p.add_argument("--end-sec", type=float, default=0.0)
-    p.add_argument("--max-frames", type=int, default=0,
-                   help="Max sampled frames to process (0=unlimited)")
+    p.add_argument(
+        "--max-frames",
+        type=int,
+        default=0,
+        help="Max sampled frames to process (0=unlimited)",
+    )
     p.add_argument("--max-bad-samples", type=int, default=200)
     p.add_argument("--output-dir", type=str, default="outputs")
     return p.parse_args()
@@ -129,14 +145,18 @@ def main() -> None:
                 if topic not in dup_detectors:
                     dup_detectors[topic] = DuplicateDetector()
                 if record.image is not None:
-                    dup_detectors[topic].update(record.image, record.frame_seq, record.timestamp_ns)
+                    dup_detectors[topic].update(
+                        record.image, record.frame_seq, record.timestamp_ns
+                    )
 
                 if record.image is not None:
                     sample_images[id(record)] = record.image
                     record.image = None  # free memory after capturing
 
                 if topic not in all_topic_quality:
-                    t_info = next((t for t in summary.image_topics if t.topic == topic), None)
+                    t_info = next(
+                        (t for t in summary.image_topics if t.topic == topic), None
+                    )
                     tqs = TopicQualitySummary(
                         topic=topic,
                         message_type=t_info.message_type if t_info else "",
@@ -150,12 +170,20 @@ def main() -> None:
                 tqs = all_topic_quality[topic]
                 if record.action == "decode_error":
                     tqs.add_decode_failure()
-                elif record.quality is not None or record.quality_score > 0 or record.action in (
-                    "quality_only", "skip_inference", "inferred",
+                elif (
+                    record.quality is not None
+                    or record.quality_score > 0
+                    or record.action
+                    in (
+                        "quality_only",
+                        "skip_inference",
+                        "inferred",
+                    )
                 ):
                     qr = record.quality
                     if qr is None:
                         from app.quality.scoring import QualityResult
+
                         qr = QualityResult(
                             mcap_file=record.mcap_file,
                             topic=record.topic,
@@ -209,21 +237,40 @@ def main() -> None:
     logger.info("Writing reports ...")
     write_mcap_summary(output_dir, all_summaries)
     write_quality_report(
-        output_dir, topic_summaries, seq_summaries, combined_stats, dup_results,
+        output_dir,
+        topic_summaries,
+        seq_summaries,
+        combined_stats,
+        dup_results,
         batch_failures=batch_failures or None,
     )
     write_quality_html(
-        output_dir, topic_summaries, seq_summaries, combined_stats,
-        dup_results=dup_results, batch_failures=batch_failures or None,
+        output_dir,
+        topic_summaries,
+        seq_summaries,
+        combined_stats,
+        dup_results=dup_results,
+        batch_failures=batch_failures or None,
     )
-    write_quality_md(output_dir, topic_summaries, seq_summaries, combined_stats, dup_results=dup_results)
+    write_quality_md(
+        output_dir,
+        topic_summaries,
+        seq_summaries,
+        combined_stats,
+        dup_results=dup_results,
+    )
     write_metrics(
-        output_dir, combined_stats, all_records,
-        wall_time_sec=wall_sec, batch_failures=batch_failures or None,
+        output_dir,
+        combined_stats,
+        all_records,
+        wall_time_sec=wall_sec,
+        batch_failures=batch_failures or None,
     )
 
     if sample_images:
-        export_bad_samples(output_dir, all_records, sample_images, max_samples=args.max_bad_samples)
+        export_bad_samples(
+            output_dir, all_records, sample_images, max_samples=args.max_bad_samples
+        )
 
     if batch_failures:
         logger.warning(

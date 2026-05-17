@@ -1,4 +1,5 @@
 """Tests for sequence analyzer (FR-SEQ-001, FR-SEQ-002)."""
+
 import pytest
 
 from app.quality.sequence_analyzer import TopicSequenceTracker, SequenceSummary

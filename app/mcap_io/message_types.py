@@ -1,4 +1,5 @@
 """Data classes for frame records and MCAP metadata (FR-IMG-003)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -10,6 +11,7 @@ import numpy as np
 @dataclass
 class FrameRecord:
     """Single decoded image frame with all metadata (FR-IMG-003)."""
+
     mcap_file: str
     topic: str
     frame_seq: int
@@ -23,22 +25,27 @@ class FrameRecord:
     encoding: str
     frame_id: Optional[str]
 
-    image: np.ndarray          # BGR uint8 (H, W, 3) or grayscale (H, W)
+    image: np.ndarray  # BGR uint8 (H, W, 3) or grayscale (H, W)
     decode_ms: float
 
     # Source info
-    message_type: str = ""     # e.g. sensor_msgs/CompressedImage
-    is_depth: bool = False     # True for 16UC1 depth images
+    message_type: str = ""  # e.g. sensor_msgs/CompressedImage
+    is_depth: bool = False  # True for 16UC1 depth images
     timestamp_source: str = "log_time"  # "ros_header" | "publish_time" | "log_time"
-    compressed_payload_size: int = 0   # raw bytes of compressed data (bonus: small payload)
-    is_timestamp_anomaly: bool = False # bonus: set by pipeline if timestamp inconsistent
+    compressed_payload_size: int = (
+        0  # raw bytes of compressed data (bonus: small payload)
+    )
+    is_timestamp_anomaly: bool = (
+        False  # bonus: set by pipeline if timestamp inconsistent
+    )
 
 
 @dataclass
 class TopicInfo:
     """Metadata for a single MCAP topic."""
+
     topic: str
-    message_type: str          # e.g. sensor_msgs/CompressedImage
+    message_type: str  # e.g. sensor_msgs/CompressedImage
     message_count: int
     is_image_topic: bool
     schema_name: str = ""
@@ -48,6 +55,7 @@ class TopicInfo:
 @dataclass
 class McapSummary:
     """MCAP file-level summary (FR-MCAP-001)."""
+
     mcap_file: str
     start_time_ns: int
     end_time_ns: int

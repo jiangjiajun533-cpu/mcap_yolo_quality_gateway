@@ -52,7 +52,7 @@ string frame_id
 
 def _make_synthetic_image(seq: int, variant: int = 0) -> np.ndarray:
     """Generate a BGR image with a moving gradient and some noise.
-    
+
     variant shifts colour channels to differentiate cameras.
     Occasionally injects quality issues (dark, bright, blurry) for testing.
     """
@@ -76,7 +76,9 @@ def _make_synthetic_image(seq: int, variant: int = 0) -> np.ndarray:
     return img
 
 
-def _encode_ros1_compressed_image(img: np.ndarray, stamp_ns: int, frame_id: str = "front_camera") -> bytes:
+def _encode_ros1_compressed_image(
+    img: np.ndarray, stamp_ns: int, frame_id: str = "front_camera"
+) -> bytes:
     """
     Build a minimal ros1 serialised sensor_msgs/CompressedImage.
 
@@ -119,13 +121,18 @@ def main() -> None:
     try:
         from mcap.writer import Writer
     except ImportError:
-        print("ERROR: mcap package is required. Install with: pip install mcap", file=sys.stderr)
+        print(
+            "ERROR: mcap package is required. Install with: pip install mcap",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     interval_ns = int(1e9 / args.fps)
     base_time_ns = 1_710_000_000_000_000_000
 
-    print(f"Generating {args.frames} frames x {len(TOPICS)} topics at {args.fps}fps to {out_path} ...")
+    print(
+        f"Generating {args.frames} frames x {len(TOPICS)} topics at {args.fps}fps to {out_path} ..."
+    )
     t0 = time.perf_counter()
 
     with open(out_path, "wb") as f:
@@ -151,7 +158,9 @@ def main() -> None:
             for ti, topic in enumerate(TOPICS):
                 img = _make_synthetic_image(i, variant=ti)
                 frame_id = topic.split("/")[2] + "_camera"
-                msg_data = _encode_ros1_compressed_image(img, stamp_ns, frame_id=frame_id)
+                msg_data = _encode_ros1_compressed_image(
+                    img, stamp_ns, frame_id=frame_id
+                )
 
                 writer.add_message(
                     channel_id=channel_ids[topic],

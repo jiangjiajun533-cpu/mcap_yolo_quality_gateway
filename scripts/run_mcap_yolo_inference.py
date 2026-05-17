@@ -60,31 +60,59 @@ def _parse_args() -> argparse.Namespace:
     g.add_argument("--mcap", type=str, help="Path to a single MCAP file")
     g.add_argument("--mcap-dir", type=str, help="Directory containing MCAP files")
 
-    p.add_argument("--topics", type=str, default=None,
-                   help="Comma-separated topic names")
+    p.add_argument(
+        "--topics", type=str, default=None, help="Comma-separated topic names"
+    )
     p.add_argument("--auto-detect-topics", type=str, default="true")
 
-    p.add_argument("--model", type=str, default="models/yolov8n.onnx",
-                   help="Path to YOLO ONNX model")
-    p.add_argument("--labels", type=str, default="models/coco_classes.txt",
-                   help="Path to class labels file")
-    p.add_argument("--target-classes", type=str, default=None,
-                   help="Comma-separated target classes (e.g. person,car,truck,bus)")
+    p.add_argument(
+        "--model",
+        type=str,
+        default="models/yolov8n.onnx",
+        help="Path to YOLO ONNX model",
+    )
+    p.add_argument(
+        "--labels",
+        type=str,
+        default="models/coco_classes.txt",
+        help="Path to class labels file",
+    )
+    p.add_argument(
+        "--target-classes",
+        type=str,
+        default=None,
+        help="Comma-separated target classes (e.g. person,car,truck,bus)",
+    )
     p.add_argument("--conf-threshold", type=float, default=settings.conf_threshold)
     p.add_argument("--nms-threshold", type=float, default=settings.nms_threshold)
-    p.add_argument("--min-box-side", type=int, default=settings.min_box_side_px,
-                   help="Drop detections with shorter side below this (pixels); 0=off")
-    p.add_argument("--skip-depth-yolo", type=str, default="true",
-                   help="Skip YOLO on depth/disparity topics (true/false)")
-    p.add_argument("--detection-sample-min-conf", type=float,
-                   default=settings.detection_sample_min_conf,
-                   help="Min max-object confidence to export detection_samples")
+    p.add_argument(
+        "--min-box-side",
+        type=int,
+        default=settings.min_box_side_px,
+        help="Drop detections with shorter side below this (pixels); 0=off",
+    )
+    p.add_argument(
+        "--skip-depth-yolo",
+        type=str,
+        default="true",
+        help="Skip YOLO on depth/disparity topics (true/false)",
+    )
+    p.add_argument(
+        "--detection-sample-min-conf",
+        type=float,
+        default=settings.detection_sample_min_conf,
+        help="Min max-object confidence to export detection_samples",
+    )
     p.add_argument("--input-size", type=int, default=640)
     p.add_argument("--device", type=str, default="cpu", choices=["cpu", "gpu"])
 
     p.add_argument("--quality-threshold", type=float, default=0.6)
-    p.add_argument("--infer-low-quality", type=str, default="false",
-                   help="Force YOLO on low-quality frames (true/false)")
+    p.add_argument(
+        "--infer-low-quality",
+        type=str,
+        default="false",
+        help="Force YOLO on low-quality frames (true/false)",
+    )
     p.add_argument("--sample-every-n", type=int, default=1)
     p.add_argument("--target-fps", type=float, default=0.0)
     p.add_argument("--start-sec", type=float, default=0.0)
@@ -128,7 +156,8 @@ def main() -> None:
     skip_depth_yolo = _bool_arg(args.skip_depth_yolo)
     target_classes = (
         [c.strip() for c in args.target_classes.split(",") if c.strip()]
-        if args.target_classes else None
+        if args.target_classes
+        else None
     )
 
     logger.info(f"Loading YOLO model: {args.model}")
@@ -184,7 +213,9 @@ def main() -> None:
                 if topic not in dup_detectors:
                     dup_detectors[topic] = DuplicateDetector()
                 if record.image is not None:
-                    dup_detectors[topic].update(record.image, record.frame_seq, record.timestamp_ns)
+                    dup_detectors[topic].update(
+                        record.image, record.frame_seq, record.timestamp_ns
+                    )
 
                 if record.image is not None:
                     sample_images[id(record)] = record.image
@@ -192,7 +223,9 @@ def main() -> None:
 
                 topic = record.topic
                 if topic not in all_topic_quality:
-                    t_info = next((t for t in summary.image_topics if t.topic == topic), None)
+                    t_info = next(
+                        (t for t in summary.image_topics if t.topic == topic), None
+                    )
                     all_topic_quality[topic] = TopicQualitySummary(
                         topic=topic,
                         message_type=t_info.message_type if t_info else "",
@@ -204,34 +237,38 @@ def main() -> None:
                 tqs = all_topic_quality[topic]
                 if record.action == "decode_error":
                     tqs.add_decode_failure()
-            elif record.quality is not None:
-                tqs.add(record.quality, decode_ms=record.latency_ms.get("decode", 0.0))
-                all_seq_trackers[topic].update(
-                    timestamp_ns=record.timestamp_ns,
-                    width=record.quality.width,
-                    height=record.quality.height,
-                )
-            else:
-                qr = QualityResult(
-                    mcap_file=record.mcap_file,
-                    topic=record.topic,
-                    frame_seq=record.frame_seq,
-                    timestamp_ns=record.timestamp_ns,
-                    log_time_ns=record.log_time_ns,
-                    publish_time_ns=record.publish_time_ns,
-                    ros_stamp_ns=record.ros_stamp_ns,
-                    timestamp_source=record.timestamp_source,
-                    quality_score=record.quality_score,
-                    quality_tags=record.quality_tags,
-                    penalties=record.quality_penalties,
-                    is_bad_quality=record.is_bad_quality,
-                )
-                tqs.add(qr, decode_ms=record.latency_ms.get("decode", 0.0))
-                all_seq_trackers[topic].update(
-                    timestamp_ns=record.timestamp_ns,
-                    width=qr.width,
-                    height=qr.height,
-                )
+                elif (
+                    record.quality is not None
+                    or record.quality_score > 0
+                    or record.action
+                    in (
+                        "quality_only",
+                        "skip_inference",
+                        "inferred",
+                    )
+                ):
+                    qr = record.quality
+                    if qr is None:
+                        qr = QualityResult(
+                            mcap_file=record.mcap_file,
+                            topic=record.topic,
+                            frame_seq=record.frame_seq,
+                            timestamp_ns=record.timestamp_ns,
+                            log_time_ns=record.log_time_ns,
+                            publish_time_ns=record.publish_time_ns,
+                            ros_stamp_ns=record.ros_stamp_ns,
+                            timestamp_source=record.timestamp_source,
+                            quality_score=record.quality_score,
+                            quality_tags=record.quality_tags,
+                            penalties=record.quality_penalties,
+                            is_bad_quality=record.is_bad_quality,
+                        )
+                    tqs.add(qr, decode_ms=record.latency_ms.get("decode", 0.0))
+                    all_seq_trackers[topic].update(
+                        timestamp_ns=record.timestamp_ns,
+                        width=qr.width,
+                        height=qr.height,
+                    )
 
             if stats_out:
                 s = stats_out[0]
@@ -267,6 +304,7 @@ def main() -> None:
     dup_results = {t: d.finalize() for t, d in dup_detectors.items()}
 
     from app.report.json_report import _aggregate_latencies
+
     perf = {
         "wall_time_sec": round(wall_sec, 3),
         "processed_frames_per_sec": (
@@ -278,18 +316,35 @@ def main() -> None:
     logger.info("Writing reports ...")
     write_mcap_summary(output_dir, all_summaries)
     write_quality_report(
-        output_dir, topic_summaries, seq_summaries, combined_stats, dup_results,
+        output_dir,
+        topic_summaries,
+        seq_summaries,
+        combined_stats,
+        dup_results,
         batch_failures=batch_failures or None,
     )
     write_quality_html(
-        output_dir, topic_summaries, seq_summaries, combined_stats,
-        dup_results=dup_results, batch_failures=batch_failures or None,
+        output_dir,
+        topic_summaries,
+        seq_summaries,
+        combined_stats,
+        dup_results=dup_results,
+        batch_failures=batch_failures or None,
     )
-    write_quality_md(output_dir, topic_summaries, seq_summaries, combined_stats, dup_results=dup_results)
+    write_quality_md(
+        output_dir,
+        topic_summaries,
+        seq_summaries,
+        combined_stats,
+        dup_results=dup_results,
+    )
     write_yolo_predictions(
-        output_dir, all_records,
+        output_dir,
+        all_records,
         model_info=model_info,
-        target_classes=list(target_classes) if target_classes else runner.class_names[:10],
+        target_classes=(
+            list(target_classes) if target_classes else runner.class_names[:10]
+        ),
     )
     write_yolo_html(
         output_dir,
@@ -308,14 +363,18 @@ def main() -> None:
         records=all_records,
     )
     write_metrics(
-        output_dir, combined_stats, all_records,
+        output_dir,
+        combined_stats,
+        all_records,
         target_analyzer=target_analyzer,
         wall_time_sec=wall_sec,
         batch_failures=batch_failures or None,
     )
 
     if sample_images:
-        export_bad_samples(output_dir, all_records, sample_images, max_samples=args.max_bad_samples)
+        export_bad_samples(
+            output_dir, all_records, sample_images, max_samples=args.max_bad_samples
+        )
         export_detection_samples(
             output_dir,
             all_records,

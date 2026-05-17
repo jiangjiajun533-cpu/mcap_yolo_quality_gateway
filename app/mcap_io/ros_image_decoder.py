@@ -3,6 +3,7 @@ ROS image message decoder.
 Supports CompressedImage (FR-IMG-001) and raw Image (FR-IMG-002).
 Preserves timestamps (FR-IMG-003).
 """
+
 from __future__ import annotations
 
 import time
@@ -29,11 +30,11 @@ logger = get_logger("mcap_io.ros_image_decoder")
 
 # Raw image encodings → OpenCV conversion code (or None for special handling)
 _ENCODING_TO_CONVERT = {
-    "rgb8":   cv2.COLOR_RGB2BGR,
-    "bgr8":   None,              # already BGR
-    "mono8":  None,              # grayscale, no conversion needed
-    "rgba8":  cv2.COLOR_RGBA2BGR,
-    "bgra8":  cv2.COLOR_BGRA2BGR,
+    "rgb8": cv2.COLOR_RGB2BGR,
+    "bgr8": None,  # already BGR
+    "mono8": None,  # grayscale, no conversion needed
+    "rgba8": cv2.COLOR_RGBA2BGR,
+    "bgra8": cv2.COLOR_BGRA2BGR,
 }
 
 # Depth / special encodings (supported with grayscale fallback)
@@ -41,15 +42,25 @@ _DEPTH_ENCODINGS = {"16UC1", "32FC1"}
 
 # Channels per encoding
 _ENCODING_CHANNELS = {
-    "rgb8": 3, "bgr8": 3, "rgba8": 4, "bgra8": 4,
-    "mono8": 1, "yuv422": 2,
-    "16UC1": 1, "32FC1": 1,
+    "rgb8": 3,
+    "bgr8": 3,
+    "rgba8": 4,
+    "bgra8": 4,
+    "mono8": 1,
+    "yuv422": 2,
+    "16UC1": 1,
+    "32FC1": 1,
 }
 
 _ENCODING_DTYPE = {
-    "rgb8": np.uint8, "bgr8": np.uint8, "rgba8": np.uint8, "bgra8": np.uint8,
-    "mono8": np.uint8, "yuv422": np.uint8,
-    "16UC1": np.uint16, "32FC1": np.float32,
+    "rgb8": np.uint8,
+    "bgr8": np.uint8,
+    "rgba8": np.uint8,
+    "bgra8": np.uint8,
+    "mono8": np.uint8,
+    "yuv422": np.uint8,
+    "16UC1": np.uint16,
+    "32FC1": np.float32,
 }
 
 
@@ -81,7 +92,9 @@ def decode_compressed_image(
         raise CompressedImageDecodeError(f"Cannot read data field: {exc}") from exc
 
     if not raw_data:
-        raise EmptyFrameError(f"CompressedImage data is empty: topic={topic} seq={frame_seq}")
+        raise EmptyFrameError(
+            f"CompressedImage data is empty: topic={topic} seq={frame_seq}"
+        )
 
     # Decode JPEG / PNG bytes → numpy BGR
     buf = np.frombuffer(raw_data, dtype=np.uint8)
@@ -104,8 +117,10 @@ def decode_compressed_image(
     except Exception:
         pass
 
-    timestamp_source = "ros_header" if ros_stamp_ns else (
-        "publish_time" if publish_time_ns else "log_time"
+    timestamp_source = (
+        "ros_header"
+        if ros_stamp_ns
+        else ("publish_time" if publish_time_ns else "log_time")
     )
 
     return FrameRecord(
@@ -170,7 +185,9 @@ def decode_raw_image(
 
     # Reshape raw bytes to image array
     if channels == 1:
-        img_raw = np.frombuffer(raw_data, dtype=dtype).reshape((height, step // dtype(0).itemsize))
+        img_raw = np.frombuffer(raw_data, dtype=dtype).reshape(
+            (height, step // dtype(0).itemsize)
+        )
         img_raw = img_raw[:, :width]  # strip padding if step > width * itemsize
     else:
         img_raw = np.frombuffer(raw_data, dtype=np.uint8).reshape((height, step))
@@ -214,8 +231,10 @@ def decode_raw_image(
     except Exception:
         pass
 
-    timestamp_source = "ros_header" if ros_stamp_ns else (
-        "publish_time" if publish_time_ns else "log_time"
+    timestamp_source = (
+        "ros_header"
+        if ros_stamp_ns
+        else ("publish_time" if publish_time_ns else "log_time")
     )
 
     return FrameRecord(
@@ -259,6 +278,7 @@ def decode_ros_message(
         )
     else:
         from app.core.errors import UnsupportedMessageTypeError
+
         raise UnsupportedMessageTypeError(
             f"Unknown image schema '{schema_name}' on topic={topic}"
         )

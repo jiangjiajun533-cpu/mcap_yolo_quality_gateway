@@ -1,6 +1,7 @@
 """
 Factory for selecting YOLO inference backend (onnxruntime or tensorrt).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -31,6 +32,7 @@ def create_runner(
     """
     if backend == "tensorrt":
         from app.yolo.trt_runner import YoloTrtRunner
+
         logger.info(f"Using TensorRT backend: {model_path}")
         return YoloTrtRunner(
             engine_path=model_path,
@@ -43,6 +45,7 @@ def create_runner(
         )
     else:
         from app.yolo.onnx_runner import YoloOnnxRunner
+
         logger.info(f"Using ONNX Runtime backend: {model_path}")
         return YoloOnnxRunner(
             model_path=model_path,

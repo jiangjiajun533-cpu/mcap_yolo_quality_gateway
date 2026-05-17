@@ -4,6 +4,7 @@ YOLO preprocessing: letterbox resize + normalize + HWC→CHW (FR-YOLO-003).
 Key contract: returns both the model input tensor AND the LetterboxMeta
 needed to map bbox coordinates back to the original image.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -24,13 +25,14 @@ class LetterboxMeta:
         x_orig = (x_model - pad_left) / scale
         y_orig = (y_model - pad_top)  / scale
     """
+
     orig_w: int
     orig_h: int
     input_w: int
     input_h: int
-    scale: float        # same scale applied to both axes
-    pad_left: float     # horizontal padding (pixels, model space)
-    pad_top: float      # vertical padding  (pixels, model space)
+    scale: float  # same scale applied to both axes
+    pad_left: float  # horizontal padding (pixels, model space)
+    pad_top: float  # vertical padding  (pixels, model space)
 
 
 def letterbox(
@@ -60,14 +62,16 @@ def letterbox(
 
     # Symmetric padding
     pad_left = (target_size - new_w) / 2
-    pad_top  = (target_size - new_h) / 2
-    pad_right  = target_size - new_w - int(pad_left)
+    pad_top = (target_size - new_h) / 2
+    pad_right = target_size - new_w - int(pad_left)
     pad_bottom = target_size - new_h - int(pad_top)
 
     padded = cv2.copyMakeBorder(
         resized,
-        int(pad_top), pad_bottom,
-        int(pad_left), pad_right,
+        int(pad_top),
+        pad_bottom,
+        int(pad_left),
+        pad_right,
         cv2.BORDER_CONSTANT,
         value=pad_color,
     )
@@ -102,14 +106,17 @@ def preprocess(
     """
     padded, meta = letterbox(img, target_size)
     rgb = cv2.cvtColor(padded, cv2.COLOR_BGR2RGB)
-    chw = rgb.transpose(2, 0, 1)                     # HWC → CHW
-    tensor = chw.astype(np.float32) / 255.0           # normalise
-    tensor = np.expand_dims(tensor, axis=0)           # add batch dim
+    chw = rgb.transpose(2, 0, 1)  # HWC → CHW
+    tensor = chw.astype(np.float32) / 255.0  # normalise
+    tensor = np.expand_dims(tensor, axis=0)  # add batch dim
     return tensor, meta
 
 
 def unscale_coords(
-    x1: float, y1: float, x2: float, y2: float,
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
     meta: LetterboxMeta,
 ) -> Tuple[int, int, int, int]:
     """
@@ -117,9 +124,9 @@ def unscale_coords(
     Clips to valid range.
     """
     x1 = (x1 - meta.pad_left) / meta.scale
-    y1 = (y1 - meta.pad_top)  / meta.scale
+    y1 = (y1 - meta.pad_top) / meta.scale
     x2 = (x2 - meta.pad_left) / meta.scale
-    y2 = (y2 - meta.pad_top)  / meta.scale
+    y2 = (y2 - meta.pad_top) / meta.scale
 
     # Clip to original image bounds
     x1 = max(0, min(int(round(x1)), meta.orig_w - 1))

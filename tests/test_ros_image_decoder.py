@@ -1,4 +1,5 @@
 """Tests for ROS image decoder (FR-IMG-001, FR-IMG-002)."""
+
 import struct
 
 import cv2
@@ -72,9 +73,11 @@ class TestDecodeCompressed:
         class MockStamp:
             sec = 0
             nanosec = 0
+
         class MockHeader:
             stamp = MockStamp()
             frame_id = ""
+
         class MockMsg:
             header = MockHeader()
             format = "jpeg"
@@ -95,9 +98,11 @@ class TestDecodeCompressed:
         class MockStamp:
             sec = 0
             nanosec = 0
+
         class MockHeader:
             stamp = MockStamp()
             frame_id = ""
+
         class MockMsg:
             header = MockHeader()
             format = "jpeg"

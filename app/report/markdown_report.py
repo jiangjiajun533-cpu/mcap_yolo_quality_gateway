@@ -5,6 +5,7 @@ Outputs:
   quality_report.md — text-based quality overview
   yolo_report.md    — text-based detection summary
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,6 +23,7 @@ logger = get_logger("report.markdown")
 
 
 # ── FR-REPORT-002: quality_report.md ──────────────────────────────────────
+
 
 def write_quality_md(
     output_dir: Path,
@@ -111,7 +113,9 @@ def write_quality_md(
                     lines.append("|-------|-------|-----|--------------|")
                     any_groups = True
                 for g in groups:
-                    lines.append(f"| {topic.split('/')[-1]} | {g.start_frame_seq} | {g.end_frame_seq} | {g.duration_sec:.2f} |")
+                    lines.append(
+                        f"| {topic.split('/')[-1]} | {g.start_frame_seq} | {g.end_frame_seq} | {g.duration_sec:.2f} |"
+                    )
         if any_groups:
             lines.append("")
 
@@ -119,7 +123,9 @@ def write_quality_md(
     total_proc = sum(ts.processed_frames for ts in topic_summaries)
     total_bad = sum(ts.bad_quality_frames for ts in topic_summaries)
     bad_r = total_bad / total_proc if total_proc else 0
-    avg_scores = [ts.avg_quality_score for ts in topic_summaries if ts.avg_quality_score]
+    avg_scores = [
+        ts.avg_quality_score for ts in topic_summaries if ts.avg_quality_score
+    ]
     overall_avg = sum(avg_scores) / len(avg_scores) if avg_scores else 0
     all_issues: dict[str, int] = {}
     for ts in topic_summaries:
@@ -136,8 +142,10 @@ def write_quality_md(
         verdict = "moderate — review recommended"
     else:
         verdict = "poor — immediate attention needed"
-    lines.append(f"Analyzed **{total_proc}** frames across **{len(topic_summaries)}** camera topics. "
-                 f"Overall quality is **{verdict}** — {bad_r:.1%} bad frames (avg score {overall_avg:.3f}).")
+    lines.append(
+        f"Analyzed **{total_proc}** frames across **{len(topic_summaries)}** camera topics. "
+        f"Overall quality is **{verdict}** — {bad_r:.1%} bad frames (avg score {overall_avg:.3f})."
+    )
     if top3:
         issue_str = ", ".join(f"{k} ({v})" for k, v in top3)
         lines.append(f"Top issues: {issue_str}.")
@@ -153,6 +161,7 @@ def write_quality_md(
 
 
 # ── FR-REPORT-003: yolo_report.md ────────────────────────────────────────
+
 
 def write_yolo_md(
     output_dir: Path,
@@ -211,7 +220,14 @@ def write_yolo_md(
         if avg:
             lines.append("| Stage | Avg (ms) | P95 (ms) |")
             lines.append("|-------|----------|----------|")
-            for k in ["decode", "quality", "preprocess", "inference", "postprocess", "total"]:
+            for k in [
+                "decode",
+                "quality",
+                "preprocess",
+                "inference",
+                "postprocess",
+                "total",
+            ]:
                 a = avg.get(k, "-")
                 p = p95.get(k, "-")
                 lines.append(f"| {k} | {a} | {p} |")
@@ -231,7 +247,9 @@ def write_yolo_md(
                     topic_class_counts[t_short] = {}
                 for o in r.objects:
                     lbl = o.label if hasattr(o, "label") else o.get("label", "?")
-                    topic_class_counts[t_short][lbl] = topic_class_counts[t_short].get(lbl, 0) + 1
+                    topic_class_counts[t_short][lbl] = (
+                        topic_class_counts[t_short].get(lbl, 0) + 1
+                    )
                     all_classes.add(lbl)
         if topic_class_counts:
             cls_list = sorted(all_classes)
@@ -264,7 +282,12 @@ def write_yolo_md(
                 lines.append(f"| {bname} | 0 | — | — |")
                 continue
             n_obj = [len(r.objects) for r in recs]
-            confs = [o.confidence for r in recs for o in r.objects if hasattr(o, "confidence")]
+            confs = [
+                o.confidence
+                for r in recs
+                for o in r.objects
+                if hasattr(o, "confidence")
+            ]
             avg_obj = round(sum(n_obj) / len(n_obj), 2)
             avg_conf = round(sum(confs) / len(confs), 3) if confs else "—"
             lines.append(f"| {bname} | {len(recs)} | {avg_obj} | {avg_conf} |")
@@ -280,9 +303,13 @@ def write_yolo_md(
         inferred = fr.get("infer_success_frames", 0)
         skipped_q = fr.get("skipped_low_quality_frames", 0)
         failed = fr.get("infer_failed_frames", 0)
-        conclusion_parts.append(f"Processed **{sampled}** sampled frames; **{inferred}** successfully inferred.")
+        conclusion_parts.append(
+            f"Processed **{sampled}** sampled frames; **{inferred}** successfully inferred."
+        )
         if skipped_q:
-            conclusion_parts.append(f"{skipped_q} frames skipped due to low quality gating.")
+            conclusion_parts.append(
+                f"{skipped_q} frames skipped due to low quality gating."
+            )
         if failed:
             conclusion_parts.append(f"**{failed}** frames failed inference.")
         else:
@@ -292,9 +319,17 @@ def write_yolo_md(
         if ta_data:
             total_det = sum(t.get("detected_count", 0) for t in ta_data)
             top_cls = sorted(ta_data, key=lambda t: -t.get("detected_count", 0))[:3]
-            cls_str = ", ".join(f"{t.get('label','')} ({t.get('detected_count',0)})" for t in top_cls)
-            conclusion_parts.append(f"Total detections: {total_det}. Top classes: {cls_str}.")
-    lines.append(" ".join(conclusion_parts) if conclusion_parts else "No inference data available.")
+            cls_str = ", ".join(
+                f"{t.get('label','')} ({t.get('detected_count',0)})" for t in top_cls
+            )
+            conclusion_parts.append(
+                f"Total detections: {total_det}. Top classes: {cls_str}."
+            )
+    lines.append(
+        " ".join(conclusion_parts)
+        if conclusion_parts
+        else "No inference data available."
+    )
     lines.append("")
 
     lines.append("\n---\n*All statistics are based on sampled frames only.*\n")

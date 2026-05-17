@@ -7,6 +7,7 @@ GET /mcap/frame_info   — return frame metadata, quality, and detections as JSO
 GET /mcap/topic_frames — return total frame count for a topic
 GET /mcap/resolve_frame — map pipeline timestamp_ns to raw message index
 """
+
 from __future__ import annotations
 
 import io
@@ -87,7 +88,9 @@ def _decode_at_index(
                 raise HTTPException(status_code=422, detail=f"Decode failed: {exc}")
         idx += 1
 
-    raise HTTPException(status_code=404, detail=f"Frame {frame_seq} not found on {topic}")
+    raise HTTPException(
+        status_code=404, detail=f"Frame {frame_seq} not found on {topic}"
+    )
 
 
 def _decode_by_timestamp(
@@ -147,7 +150,9 @@ def _get_frame(
 ) -> _DecodedFrame:
     p = resolve_mcap_path(mcap_path)
     if not p.is_file():
-        raise HTTPException(status_code=404, detail=f"MCAP not found: {mcap_path} (tried {p})")
+        raise HTTPException(
+            status_code=404, detail=f"MCAP not found: {mcap_path} (tried {p})"
+        )
 
     # Prefer raw_frame_idx — exact match to pipeline sampling index
     if raw_frame_idx is not None and raw_frame_idx >= 0:
@@ -183,7 +188,8 @@ def get_frame(
     raw_frame_idx: Optional[int] = Query(None, ge=0),
 ):
     decoded = _get_frame(
-        mcap_path, topic,
+        mcap_path,
+        topic,
         frame_seq=frame_seq,
         timestamp_ns=timestamp_ns,
         raw_frame_idx=raw_frame_idx,
@@ -259,7 +265,8 @@ def get_frame_yolo(
     model_path: str = Query("models/yolov8n.onnx"),
 ):
     decoded = _get_frame(
-        mcap_path, topic,
+        mcap_path,
+        topic,
         frame_seq=frame_seq,
         timestamp_ns=timestamp_ns,
         raw_frame_idx=raw_frame_idx,
@@ -288,7 +295,9 @@ def get_frame_info(
     run_yolo: bool = Query(False),
 ):
     """Return frame metadata, quality metrics, and optionally YOLO detections as JSON."""
-    decoded = _get_frame(mcap_path, topic, frame_seq=frame_seq, timestamp_ns=timestamp_ns)
+    decoded = _get_frame(
+        mcap_path, topic, frame_seq=frame_seq, timestamp_ns=timestamp_ns
+    )
     img = decoded.image
     h, w = img.shape[:2]
 
@@ -334,7 +343,9 @@ def get_frame_info(
         runner = _runner_cache[model_path]
         detections, latency = runner.infer(img)
         result["detections"] = [d.to_dict() for d in detections]
-        result["inference_ms"] = round(latency * 1000, 2) if isinstance(latency, float) else 0
+        result["inference_ms"] = (
+            round(latency * 1000, 2) if isinstance(latency, float) else 0
+        )
 
     return result
 

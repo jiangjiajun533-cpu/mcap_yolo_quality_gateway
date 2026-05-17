@@ -49,7 +49,9 @@ def http_get(url: str) -> tuple[int, bytes]:
 
 def http_post_json(url: str, body: dict) -> tuple[int, bytes]:
     data = json.dumps(body).encode()
-    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+    req = urllib.request.Request(
+        url, data=data, headers={"Content-Type": "application/json"}, method="POST"
+    )
     with urllib.request.urlopen(req, timeout=120) as r:
         return r.status, r.read()
 
@@ -64,15 +66,24 @@ def run_cli(output_dir: Path) -> None:
     cmd = [
         sys.executable,
         str(PROJECT_ROOT / "scripts" / "run_mcap_yolo_inference.py"),
-        "--mcap", str(MCAP),
-        "--auto-detect-topics", "true",
-        "--model", str(MODEL),
-        "--labels", str(LABELS),
-        "--target-classes", "person,car,truck,bus",
-        "--sample-every-n", "5",
-        "--quality-threshold", "0.6",
-        "--max-frames", "50",
-        "--output-dir", str(output_dir),
+        "--mcap",
+        str(MCAP),
+        "--auto-detect-topics",
+        "true",
+        "--model",
+        str(MODEL),
+        "--labels",
+        str(LABELS),
+        "--target-classes",
+        "person,car,truck,bus",
+        "--sample-every-n",
+        "5",
+        "--quality-threshold",
+        "0.6",
+        "--max-frames",
+        "50",
+        "--output-dir",
+        str(output_dir),
     ]
     print("  ", " ".join(cmd))
     r = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
@@ -94,11 +105,15 @@ def run_cli(output_dir: Path) -> None:
 
 def verify_reports(output_dir: Path) -> dict:
     step("2. Reports: JSON structure")
-    preds = json.loads((output_dir / "yolo_predictions.json").read_text(encoding="utf-8"))
+    preds = json.loads(
+        (output_dir / "yolo_predictions.json").read_text(encoding="utf-8")
+    )
     pred_list = preds.get("predictions") or []
     if not pred_list:
         fail("yolo_predictions.json has no predictions")
-    inferred = [p for p in pred_list if p.get("action") == "inferred" and p.get("objects")]
+    inferred = [
+        p for p in pred_list if p.get("action") == "inferred" and p.get("objects")
+    ]
     if not inferred:
         fail("No inferred frames with objects — cannot test draw_frame")
     sample = inferred[0]
@@ -173,9 +188,15 @@ def test_api(api_base: str, output_dir: Path, sample: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="E2E pipeline + visualization test")
-    parser.add_argument("--api-base", default="http://127.0.0.1:8000", help="Running uvicorn base URL")
-    parser.add_argument("--output-dir", default=str(OUTPUT), help="CLI output directory")
-    parser.add_argument("--skip-cli", action="store_true", help="Skip CLI run, use existing outputs")
+    parser.add_argument(
+        "--api-base", default="http://127.0.0.1:8000", help="Running uvicorn base URL"
+    )
+    parser.add_argument(
+        "--output-dir", default=str(OUTPUT), help="CLI output directory"
+    )
+    parser.add_argument(
+        "--skip-cli", action="store_true", help="Skip CLI run, use existing outputs"
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)

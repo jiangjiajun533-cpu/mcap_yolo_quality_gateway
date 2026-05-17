@@ -2,6 +2,7 @@
 Near-duplicate frame detection using perceptual hashing (FR-SEQ-003, bonus).
 Uses a simple average-hash (aHash) which is fast and requires no extra deps.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -14,8 +15,8 @@ from app.core.logging import get_logger
 
 logger = get_logger("quality.duplicate")
 
-_HASH_SIZE = 8          # 8×8 = 64-bit hash
-_DUP_THRESHOLD = 10     # Hamming distance ≤ this → near-duplicate
+_HASH_SIZE = 8  # 8×8 = 64-bit hash
+_DUP_THRESHOLD = 10  # Hamming distance ≤ this → near-duplicate
 
 
 def _ahash(img: np.ndarray, hash_size: int = _HASH_SIZE) -> np.ndarray:
@@ -83,21 +84,25 @@ class DuplicateDetector:
             elif not is_dup and in_group:
                 in_group = False
                 if i - 1 > group_start_idx:  # at least 2 consecutive dups
-                    groups.append(DuplicateGroup(
-                        start_frame_seq=self._seqs[group_start_idx],
-                        end_frame_seq=self._seqs[i - 1],
-                        start_timestamp_ns=self._timestamps[group_start_idx],
-                        end_timestamp_ns=self._timestamps[i - 1],
-                    ))
+                    groups.append(
+                        DuplicateGroup(
+                            start_frame_seq=self._seqs[group_start_idx],
+                            end_frame_seq=self._seqs[i - 1],
+                            start_timestamp_ns=self._timestamps[group_start_idx],
+                            end_timestamp_ns=self._timestamps[i - 1],
+                        )
+                    )
 
         # Close open group at end
         if in_group and len(self._hashes) - 1 > group_start_idx:
-            groups.append(DuplicateGroup(
-                start_frame_seq=self._seqs[group_start_idx],
-                end_frame_seq=self._seqs[-1],
-                start_timestamp_ns=self._timestamps[group_start_idx],
-                end_timestamp_ns=self._timestamps[-1],
-            ))
+            groups.append(
+                DuplicateGroup(
+                    start_frame_seq=self._seqs[group_start_idx],
+                    end_frame_seq=self._seqs[-1],
+                    start_timestamp_ns=self._timestamps[group_start_idx],
+                    end_timestamp_ns=self._timestamps[-1],
+                )
+            )
 
         return groups
 

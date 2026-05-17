@@ -1,4 +1,5 @@
 """GET /jobs/{job_id} endpoint (FR-API-006)."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException

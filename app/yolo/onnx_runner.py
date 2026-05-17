@@ -2,6 +2,7 @@
 ONNX Runtime inference runner for YOLO models (FR-YOLO-001).
 Handles model loading, input name discovery, inference timing.
 """
+
 from __future__ import annotations
 
 import time
@@ -45,7 +46,7 @@ class YoloOnnxRunner:
             import onnxruntime as ort
 
             opts = ort.SessionOptions()
-            opts.intra_op_num_threads = 0   # 0 = use all cores
+            opts.intra_op_num_threads = 0  # 0 = use all cores
             opts.inter_op_num_threads = 0
             opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
@@ -55,7 +56,9 @@ class YoloOnnxRunner:
                 else ["CPUExecutionProvider"]
             )
             self._session = ort.InferenceSession(
-                str(model_path), sess_options=opts, providers=requested_providers,
+                str(model_path),
+                sess_options=opts,
+                providers=requested_providers,
             )
             active_providers = self._session.get_providers()
             self._using_cuda = (
@@ -68,7 +71,9 @@ class YoloOnnxRunner:
                     "(see README §18.1), or run with --device cpu."
                 )
         except Exception as exc:
-            raise ModelLoadError(f"Failed to load ONNX model {model_path}: {exc}") from exc
+            raise ModelLoadError(
+                f"Failed to load ONNX model {model_path}: {exc}"
+            ) from exc
 
         self._input_name: str = self._session.get_inputs()[0].name
         self._input_shape: List[int] = list(self._session.get_inputs()[0].shape)
@@ -142,9 +147,9 @@ class YoloOnnxRunner:
 
         latency = {
             "preprocess_ms": round((t_pre - t_start) * 1000, 2),
-            "inference_ms":  round((t_inf - t_pre)   * 1000, 2),
-            "postprocess_ms": round((t_end - t_inf)  * 1000, 2),
-            "total_ms":      round((t_end - t_start) * 1000, 2),
+            "inference_ms": round((t_inf - t_pre) * 1000, 2),
+            "postprocess_ms": round((t_end - t_inf) * 1000, 2),
+            "total_ms": round((t_end - t_start) * 1000, 2),
         }
         return detections, latency
 
@@ -189,7 +194,7 @@ class YoloOnnxRunner:
         results: List[Tuple[List[Detection], Dict[str, float]]] = []
         raw_batch = outputs[0]
         for i, meta in enumerate(metas):
-            raw_single = raw_batch[i:i+1]
+            raw_single = raw_batch[i : i + 1]
             detections = postprocess(
                 raw_output=raw_single,
                 meta=meta,

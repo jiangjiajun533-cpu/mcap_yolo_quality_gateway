@@ -7,6 +7,7 @@ Outputs:
   yolo_predictions.json — per-frame inference records
   metrics.json          — pipeline-level sampling + perf stats
 """
+
 from __future__ import annotations
 
 import json
@@ -48,6 +49,7 @@ def _write_json(path: Path, data: Any) -> None:
 
 # ── FR-REPORT-001: mcap_summary.json ──────────────────────────────────────
 
+
 def write_mcap_summary(
     output_dir: Path,
     summaries: List[McapSummary],
@@ -81,6 +83,7 @@ def write_mcap_summary(
 
 
 # ── FR-REPORT-002: quality_report.json ────────────────────────────────────
+
 
 def write_quality_report(
     output_dir: Path,
@@ -124,6 +127,7 @@ def write_quality_report(
 
 # ── FR-REPORT-003: yolo_predictions.json ──────────────────────────────────
 
+
 def write_yolo_predictions(
     output_dir: Path,
     records: List[InferenceRecord],
@@ -144,6 +148,7 @@ def write_yolo_predictions(
 
 # ── metrics.json (FR-REPORT-003 + NFR-002 perf) ──────────────────────────
 
+
 def write_metrics(
     output_dir: Path,
     pipeline_stats: PipelineStats,
@@ -162,7 +167,8 @@ def write_metrics(
             "wall_time_sec": round(wall_time_sec, 3),
             "processed_frames_per_sec": (
                 round(pipeline_stats.sampled_frames / wall_time_sec, 2)
-                if wall_time_sec > 0 else 0.0
+                if wall_time_sec > 0
+                else 0.0
             ),
             **latencies,
         },

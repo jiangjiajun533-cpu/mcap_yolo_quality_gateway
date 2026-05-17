@@ -2,6 +2,7 @@
 Single-frame image quality metrics (FR-QUALITY-001).
 All functions take a numpy array (BGR or grayscale) and return scalar values.
 """
+
 from __future__ import annotations
 
 from typing import Tuple
@@ -27,6 +28,7 @@ def to_hsv(img: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Individual metric functions
 # ---------------------------------------------------------------------------
+
 
 def brightness_stats(img: np.ndarray) -> Tuple[float, float]:
     """Return (mean, std) brightness from grayscale version."""
@@ -95,13 +97,13 @@ def is_color_channel_anomaly(img: np.ndarray, ratio_threshold: float = 3.0) -> b
     vals = [b, g, r]
     mx, mn = max(vals), min(vals)
     if mn < 1.0:
-        return mx > 30.0   # one strong channel, others near zero
+        return mx > 30.0  # one strong channel, others near zero
     return mx / mn > ratio_threshold
 
 
-def aspect_ratio_anomaly(width: int, height: int,
-                          min_ratio: float = 0.1,
-                          max_ratio: float = 10.0) -> bool:
+def aspect_ratio_anomaly(
+    width: int, height: int, min_ratio: float = 0.1, max_ratio: float = 10.0
+) -> bool:
     """Check if width/height ratio is outside expected range."""
     if height == 0:
         return True

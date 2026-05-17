@@ -1,4 +1,5 @@
 """Tests for quality analyzer (FR-QUALITY-001, FR-QUALITY-002)."""
+
 import numpy as np
 import pytest
 
@@ -11,10 +12,18 @@ from app.mcap_io.message_types import FrameRecord
 def _make_frame(img: np.ndarray, **kwargs) -> FrameRecord:
     h, w = img.shape[:2]
     defaults = dict(
-        mcap_file="test.mcap", topic="/cam", frame_seq=0,
-        log_time_ns=1_000_000_000, publish_time_ns=1_000_000_000,
-        ros_stamp_ns=1_000_000_000, width=w, height=h,
-        encoding="bgr8", frame_id="test", image=img, decode_ms=1.0,
+        mcap_file="test.mcap",
+        topic="/cam",
+        frame_seq=0,
+        log_time_ns=1_000_000_000,
+        publish_time_ns=1_000_000_000,
+        ros_stamp_ns=1_000_000_000,
+        width=w,
+        height=h,
+        encoding="bgr8",
+        frame_id="test",
+        image=img,
+        decode_ms=1.0,
     )
     defaults.update(kwargs)
     return FrameRecord(**defaults)
@@ -54,10 +63,18 @@ class TestScoring:
         assert isinstance(result.quality_tags, list)
 
     def test_corrupted_score_zero(self):
-        m = {"width": 640, "height": 480, "brightness_mean": 0, "brightness_std": 0,
-             "blur_score": 0, "contrast_score": 0, "saturation_mean": 0,
-             "is_solid_color": False, "is_color_channel_anomaly": False,
-             "is_aspect_ratio_anomaly": False}
+        m = {
+            "width": 640,
+            "height": 480,
+            "brightness_mean": 0,
+            "brightness_std": 0,
+            "blur_score": 0,
+            "contrast_score": 0,
+            "saturation_mean": 0,
+            "is_solid_color": False,
+            "is_color_channel_anomaly": False,
+            "is_aspect_ratio_anomaly": False,
+        }
         result = compute_quality_score(m, is_corrupted=True)
         assert result.quality_score == 0.0
         assert "corrupted" in result.quality_tags

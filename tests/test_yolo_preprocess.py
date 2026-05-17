@@ -1,4 +1,5 @@
 """Tests for YOLO preprocessing (FR-YOLO-003)."""
+
 import numpy as np
 import pytest
 
@@ -59,16 +60,26 @@ class TestPreprocess:
 class TestUnscaleCoords:
     def test_identity(self):
         meta = LetterboxMeta(
-            orig_w=640, orig_h=640, input_w=640, input_h=640,
-            scale=1.0, pad_left=0.0, pad_top=0.0,
+            orig_w=640,
+            orig_h=640,
+            input_w=640,
+            input_h=640,
+            scale=1.0,
+            pad_left=0.0,
+            pad_top=0.0,
         )
         x1, y1, x2, y2 = unscale_coords(100, 200, 300, 400, meta)
         assert (x1, y1, x2, y2) == (100, 200, 300, 400)
 
     def test_with_padding(self):
         meta = LetterboxMeta(
-            orig_w=640, orig_h=480, input_w=640, input_h=640,
-            scale=1.0, pad_left=0.0, pad_top=80.0,
+            orig_w=640,
+            orig_h=480,
+            input_w=640,
+            input_h=640,
+            scale=1.0,
+            pad_left=0.0,
+            pad_top=80.0,
         )
         x1, y1, x2, y2 = unscale_coords(100, 180, 300, 380, meta)
         assert x1 == 100
@@ -78,8 +89,13 @@ class TestUnscaleCoords:
 
     def test_clips_negative(self):
         meta = LetterboxMeta(
-            orig_w=640, orig_h=480, input_w=640, input_h=640,
-            scale=1.0, pad_left=0.0, pad_top=0.0,
+            orig_w=640,
+            orig_h=480,
+            input_w=640,
+            input_h=640,
+            scale=1.0,
+            pad_left=0.0,
+            pad_top=0.0,
         )
         x1, y1, x2, y2 = unscale_coords(-10, -20, 100, 200, meta)
         assert x1 == 0
@@ -87,8 +103,13 @@ class TestUnscaleCoords:
 
     def test_clips_overflow(self):
         meta = LetterboxMeta(
-            orig_w=640, orig_h=480, input_w=640, input_h=640,
-            scale=1.0, pad_left=0.0, pad_top=0.0,
+            orig_w=640,
+            orig_h=480,
+            input_w=640,
+            input_h=640,
+            scale=1.0,
+            pad_left=0.0,
+            pad_top=0.0,
         )
         x1, y1, x2, y2 = unscale_coords(600, 400, 700, 500, meta)
         assert x2 == 640

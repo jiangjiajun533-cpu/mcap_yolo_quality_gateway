@@ -9,6 +9,7 @@ Outputs:
     <topic>_<seq>_<classes>.jpg
     index.json
 """
+
 from __future__ import annotations
 
 import json
@@ -94,6 +95,7 @@ def _pick_spread_records(
 
 # ── FR-REPORT-004: bad_samples/ ──────────────────────────────────────────
 
+
 def export_bad_samples(
     output_dir: Path,
     records: List[InferenceRecord],
@@ -110,10 +112,7 @@ def export_bad_samples(
     bad_dir = output_dir / "bad_samples"
     bad_dir.mkdir(parents=True, exist_ok=True)
 
-    bad_records = [
-        r for r in records
-        if r.is_bad_quality and id(r) in images
-    ]
+    bad_records = [r for r in records if r.is_bad_quality and id(r) in images]
     bad_records.sort(key=lambda r: r.quality_score)
     bad_records = bad_records[:max_samples]
 
@@ -131,16 +130,18 @@ def export_bad_samples(
         thumb = _make_thumbnail(img, max_side=640)
         cv2.imwrite(str(fpath), thumb, [cv2.IMWRITE_JPEG_QUALITY, 85])
 
-        index_entries.append({
-            "file": fname,
-            "mcap_file": r.mcap_file,
-            "topic": r.topic,
-            "frame_seq": r.frame_seq,
-            "raw_frame_idx": r.raw_frame_idx,
-            "timestamp_ns": r.timestamp_ns,
-            "quality_score": round(r.quality_score, 4),
-            "quality_tags": r.quality_tags,
-        })
+        index_entries.append(
+            {
+                "file": fname,
+                "mcap_file": r.mcap_file,
+                "topic": r.topic,
+                "frame_seq": r.frame_seq,
+                "raw_frame_idx": r.raw_frame_idx,
+                "timestamp_ns": r.timestamp_ns,
+                "quality_score": round(r.quality_score, 4),
+                "quality_tags": r.quality_tags,
+            }
+        )
 
     _write_index(bad_dir / "index.json", index_entries)
     logger.info(f"Exported {len(index_entries)} bad samples to {bad_dir}")
@@ -148,6 +149,7 @@ def export_bad_samples(
 
 
 # ── FR-REPORT-005: detection_samples/ ─────────────────────────────────────
+
 
 def export_detection_samples(
     output_dir: Path,
@@ -166,7 +168,8 @@ def export_detection_samples(
     det_dir.mkdir(parents=True, exist_ok=True)
 
     det_records = [
-        r for r in records
+        r
+        for r in records
         if r.action == "inferred"
         and r.objects
         and id(r) in images
@@ -190,16 +193,18 @@ def export_detection_samples(
         thumb = _make_thumbnail(annotated, max_side=960)
         cv2.imwrite(str(fpath), thumb, [cv2.IMWRITE_JPEG_QUALITY, 90])
 
-        index_entries.append({
-            "file": fname,
-            "mcap_file": r.mcap_file,
-            "topic": r.topic,
-            "frame_seq": r.frame_seq,
-            "raw_frame_idx": r.raw_frame_idx,
-            "timestamp_ns": r.timestamp_ns,
-            "quality_score": round(r.quality_score, 4),
-            "objects": [d.to_dict() for d in r.objects],
-        })
+        index_entries.append(
+            {
+                "file": fname,
+                "mcap_file": r.mcap_file,
+                "topic": r.topic,
+                "frame_seq": r.frame_seq,
+                "raw_frame_idx": r.raw_frame_idx,
+                "timestamp_ns": r.timestamp_ns,
+                "quality_score": round(r.quality_score, 4),
+                "objects": [d.to_dict() for d in r.objects],
+            }
+        )
 
     _write_index(det_dir / "index.json", index_entries)
     logger.info(f"Exported {len(index_entries)} detection samples to {det_dir}")
@@ -207,6 +212,7 @@ def export_detection_samples(
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
+
 
 def _make_thumbnail(img: np.ndarray, max_side: int = 640) -> np.ndarray:
     h, w = img.shape[:2]
@@ -248,19 +254,23 @@ def rebuild_detection_index(output_dir: Path) -> int:
         for p in preds:
             if p.get("action") != "inferred" or not p.get("objects"):
                 continue
-            fname = _detection_fname(p["topic"], int(p.get("frame_seq", 0)), p["objects"])
+            fname = _detection_fname(
+                p["topic"], int(p.get("frame_seq", 0)), p["objects"]
+            )
             if not (det_dir / fname).is_file():
                 continue
-            entries.append({
-                "file": fname,
-                "mcap_file": p.get("mcap_file", ""),
-                "topic": p.get("topic", ""),
-                "frame_seq": p.get("frame_seq"),
-                "raw_frame_idx": p.get("raw_frame_idx"),
-                "timestamp_ns": p.get("timestamp_ns"),
-                "quality_score": p.get("quality_score"),
-                "objects": p.get("objects") or [],
-            })
+            entries.append(
+                {
+                    "file": fname,
+                    "mcap_file": p.get("mcap_file", ""),
+                    "topic": p.get("topic", ""),
+                    "frame_seq": p.get("frame_seq"),
+                    "raw_frame_idx": p.get("raw_frame_idx"),
+                    "timestamp_ns": p.get("timestamp_ns"),
+                    "quality_score": p.get("quality_score"),
+                    "objects": p.get("objects") or [],
+                }
+            )
 
     if not entries:
         pat = re.compile(r"^(.+)_(\d{6})_(.+)\.jpg$", re.IGNORECASE)
@@ -269,16 +279,18 @@ def rebuild_detection_index(output_dir: Path) -> int:
             if not m:
                 continue
             short_topic, seq_s, _labels = m.groups()
-            entries.append({
-                "file": fpath.name,
-                "mcap_file": "sample.mcap",
-                "topic": short_topic,
-                "frame_seq": int(seq_s),
-                "raw_frame_idx": None,
-                "timestamp_ns": None,
-                "quality_score": None,
-                "objects": [],
-            })
+            entries.append(
+                {
+                    "file": fpath.name,
+                    "mcap_file": "sample.mcap",
+                    "topic": short_topic,
+                    "frame_seq": int(seq_s),
+                    "raw_frame_idx": None,
+                    "timestamp_ns": None,
+                    "quality_score": None,
+                    "objects": [],
+                }
+            )
 
     _write_index(det_dir / "index.json", entries)
     logger.info(f"Rebuilt detection index: {len(entries)} entries")

@@ -1,4 +1,5 @@
 """Auto-discover image topics from MCAP files (FR-MCAP-001, FR-IMG-001/002)."""
+
 from __future__ import annotations
 
 from pathlib import Path

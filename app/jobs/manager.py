@@ -4,6 +4,7 @@ In-memory job state machine for async task management.
 States: pending → running → finished | failed
 Thread-safe via a lock protecting the shared dict.
 """
+
 from __future__ import annotations
 
 import threading
@@ -24,9 +25,9 @@ class JobStatus(str, Enum):
 @dataclass
 class Job:
     job_id: str
-    job_type: str                        # "quality_scan" | "yolo_infer"
+    job_type: str  # "quality_scan" | "yolo_infer"
     status: JobStatus = JobStatus.PENDING
-    progress: float = 0.0                # 0.0 – 1.0
+    progress: float = 0.0  # 0.0 – 1.0
     created_at: float = 0.0
     started_at: float = 0.0
     finished_at: float = 0.0

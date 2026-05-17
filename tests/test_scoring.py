@@ -1,4 +1,5 @@
 """Tests for quality scoring module (FR-QUALITY-002)."""
+
 import pytest
 
 from app.quality.scoring import QualityResult, compute_quality_score
@@ -6,9 +7,12 @@ from app.quality.scoring import QualityResult, compute_quality_score
 
 def _make_normal_metrics() -> dict:
     return {
-        "width": 1280, "height": 720,
-        "brightness_mean": 120.0, "brightness_std": 50.0,
-        "blur_score": 200.0, "contrast_score": 50.0,
+        "width": 1280,
+        "height": 720,
+        "brightness_mean": 120.0,
+        "brightness_std": 50.0,
+        "blur_score": 200.0,
+        "contrast_score": 50.0,
         "saturation_mean": 60.0,
         "is_solid_color": False,
         "is_color_channel_anomaly": False,

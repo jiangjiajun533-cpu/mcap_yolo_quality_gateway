@@ -1,6 +1,7 @@
 """
 Resolve MCAP / output paths for API and dashboard (cwd-independent).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -93,17 +94,14 @@ def path_hints() -> dict:
     output_runs: list[str] = []
     if out.is_dir():
         output_runs = sorted(
-            d.name for d in out.iterdir()
-            if d.is_dir() and not d.name.startswith(".")
+            d.name for d in out.iterdir() if d.is_dir() and not d.name.startswith(".")
         )
 
     # List actual MCAP files in test_data/
     test_data = root / "test_data"
     mcap_files: list[str] = []
     if test_data.is_dir():
-        mcap_files = sorted(
-            f.name for f in test_data.iterdir() if f.suffix == ".mcap"
-        )
+        mcap_files = sorted(f.name for f in test_data.iterdir() if f.suffix == ".mcap")
 
     return {
         "in_docker": in_docker,

@@ -1,6 +1,7 @@
 """
 Load CLI pipeline outputs for dashboard review (bad / detection samples).
 """
+
 from __future__ import annotations
 
 import json
@@ -27,7 +28,9 @@ def _load_index(path: Path) -> List[Dict[str, Any]]:
     return list(data.get("samples") or [])
 
 
-def _preview_url(root: Path, static_rel: Optional[str], subdir: str, fname: str) -> Optional[str]:
+def _preview_url(
+    root: Path, static_rel: Optional[str], subdir: str, fname: str
+) -> Optional[str]:
     if not fname:
         return None
     if static_rel is not None:

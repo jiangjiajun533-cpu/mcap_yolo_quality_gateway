@@ -1,4 +1,5 @@
 """Prometheus-compatible /metrics endpoint (bonus: monitoring)."""
+
 from __future__ import annotations
 
 import threading

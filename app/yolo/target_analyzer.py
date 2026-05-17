@@ -7,6 +7,7 @@ For each detected class, accumulates:
   - average quality score of frames where it was detected
   - count in low-quality frames vs normal-quality frames
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -33,7 +34,11 @@ class TargetStats:
 
     @property
     def avg_quality_score(self) -> float:
-        return round(float(np.mean(self._quality_scores)), 4) if self._quality_scores else 0.0
+        return (
+            round(float(np.mean(self._quality_scores)), 4)
+            if self._quality_scores
+            else 0.0
+        )
 
     def to_dict(self) -> dict:
         return {
@@ -53,7 +58,7 @@ class TargetAnalyzer:
     """
 
     def __init__(self) -> None:
-        self._stats: Dict[int, TargetStats] = {}   # class_id → TargetStats
+        self._stats: Dict[int, TargetStats] = {}  # class_id → TargetStats
 
     def update(self, record: InferenceRecord) -> None:
         """Process one InferenceRecord (inferred or skip_inference)."""
@@ -82,6 +87,4 @@ class TargetAnalyzer:
             key=lambda s: s.detected_count,
             reverse=True,
         )
-        return {
-            "target_analysis": [s.to_dict() for s in sorted_stats]
-        }
+        return {"target_analysis": [s.to_dict() for s in sorted_stats]}

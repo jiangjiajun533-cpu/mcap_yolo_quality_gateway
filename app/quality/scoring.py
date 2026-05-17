@@ -5,6 +5,7 @@ explainable penalties (FR-QUALITY-002).
 score = 1.0 - blur_penalty - exposure_penalty - contrast_penalty
               - resolution_penalty - corruption_penalty
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ from app.core.config import settings
 @dataclass
 class QualityResult:
     """Full quality assessment for one frame (FR-QUALITY-001 + FR-QUALITY-002)."""
+
     # --- Frame identity ---
     mcap_file: str = ""
     topic: str = ""
@@ -119,7 +121,9 @@ def compute_quality_score(
     elif bm > cfg.brightness_high:
         result.is_too_bright = True
         tags.append("too_bright")
-        ratio = max(0.0, (bm - cfg.brightness_high) / (255.0 - cfg.brightness_high + 1e-6))
+        ratio = max(
+            0.0, (bm - cfg.brightness_high) / (255.0 - cfg.brightness_high + 1e-6)
+        )
         penalties["exposure"] = round(cfg.exposure_penalty_max * ratio, 4)
     else:
         penalties["exposure"] = 0.0

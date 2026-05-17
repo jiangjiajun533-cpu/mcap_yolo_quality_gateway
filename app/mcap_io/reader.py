@@ -1,4 +1,5 @@
 """MCAP file reader using mcap + mcap-ros1-support (FR-MCAP-001, FR-MCAP-002)."""
+
 from __future__ import annotations
 
 import os
@@ -24,7 +25,11 @@ def _build_topic_infos(summary) -> List[TopicInfo]:
     for ch_id, ch in summary.channels.items():
         schema = summary.schemas.get(ch.schema_id)
         schema_name = schema.name if schema else ""
-        msg_count = summary.statistics.channel_message_counts.get(ch_id, 0) if summary.statistics else 0
+        msg_count = (
+            summary.statistics.channel_message_counts.get(ch_id, 0)
+            if summary.statistics
+            else 0
+        )
         is_image = schema_name in IMAGE_SCHEMA_NAMES
         topics.append(
             TopicInfo(
@@ -141,15 +146,20 @@ def iter_decoded_messages(
 
     try:
         from mcap_ros1.decoder import DecoderFactory
+
         decoder_factories = [DecoderFactory()]
     except ImportError:
-        logger.warning("mcap-ros1-support not available; falling back to raw message iteration")
+        logger.warning(
+            "mcap-ros1-support not available; falling back to raw message iteration"
+        )
         decoder_factories = []
 
     try:
         with open(mcap_path, "rb") as f:
             reader = make_reader(f, decoder_factories=decoder_factories)
-            for schema, channel, message, ros_msg in reader.iter_decoded_messages(topics=topics):
+            for schema, channel, message, ros_msg in reader.iter_decoded_messages(
+                topics=topics
+            ):
                 log_time = message.log_time
                 if start_time_ns is not None and log_time < start_time_ns:
                     continue
@@ -159,4 +169,6 @@ def iter_decoded_messages(
     except (McapFileNotFoundError,):
         raise
     except Exception as exc:
-        raise McapReadError(f"Error iterating decoded messages in {mcap_path}: {exc}") from exc
+        raise McapReadError(
+            f"Error iterating decoded messages in {mcap_path}: {exc}"
+        ) from exc

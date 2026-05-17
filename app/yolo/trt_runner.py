@@ -4,6 +4,7 @@ TensorRT inference runner for YOLO models (bonus: TRT acceleration).
 Requires `tensorrt` and `pycuda` packages.
 Falls back gracefully if unavailable.
 """
+
 from __future__ import annotations
 
 import time
@@ -26,6 +27,7 @@ try:
     import tensorrt as trt  # noqa: F401
     import pycuda.driver as cuda  # noqa: F401
     import pycuda.autoinit  # noqa: F401
+
     TRT_AVAILABLE = True
 except ImportError:
     pass
@@ -67,7 +69,9 @@ class YoloTrtRunner:
                 self._engine = runtime.deserialize_cuda_engine(f.read())
             self._context = self._engine.create_execution_context()
         except Exception as exc:
-            raise ModelLoadError(f"Failed to load TRT engine {engine_path}: {exc}") from exc
+            raise ModelLoadError(
+                f"Failed to load TRT engine {engine_path}: {exc}"
+            ) from exc
 
         self._input_idx = 0
         self._output_idx = 1
@@ -86,9 +90,15 @@ class YoloTrtRunner:
 
         self.model_name = engine_path.stem
         self.model_path = engine_path
-        self.conf_threshold = settings.conf_threshold if conf_threshold is None else conf_threshold
-        self.nms_threshold = settings.nms_threshold if nms_threshold is None else nms_threshold
-        self.min_box_side_px = settings.min_box_side_px if min_box_side_px is None else min_box_side_px
+        self.conf_threshold = (
+            settings.conf_threshold if conf_threshold is None else conf_threshold
+        )
+        self.nms_threshold = (
+            settings.nms_threshold if nms_threshold is None else nms_threshold
+        )
+        self.min_box_side_px = (
+            settings.min_box_side_px if min_box_side_px is None else min_box_side_px
+        )
         self.input_size = input_size
         self.device = "gpu"
 
@@ -141,9 +151,9 @@ class YoloTrtRunner:
 
         latency = {
             "preprocess_ms": round((t_pre - t_start) * 1000, 2),
-            "inference_ms":  round((t_inf - t_pre)   * 1000, 2),
-            "postprocess_ms": round((t_end - t_inf)  * 1000, 2),
-            "total_ms":      round((t_end - t_start) * 1000, 2),
+            "inference_ms": round((t_inf - t_pre) * 1000, 2),
+            "postprocess_ms": round((t_end - t_inf) * 1000, 2),
+            "total_ms": round((t_end - t_start) * 1000, 2),
         }
         return detections, latency
 

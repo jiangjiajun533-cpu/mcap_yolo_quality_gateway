@@ -7,6 +7,7 @@ Supports YOLOv8 / YOLO11 output format:
 Also supports YOLOv5 format:
   - shape (1, 25200, 85) — [cx, cy, w, h, obj_conf, cls0..cls79]
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -21,6 +22,7 @@ from app.yolo.preprocess import LetterboxMeta, unscale_coords
 @dataclass
 class Detection:
     """Single detected object (FR-YOLO-004 output format)."""
+
     label: str
     class_id: int
     confidence: float
@@ -44,13 +46,13 @@ def _decode_yolov8(output: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarr
     Returns boxes (N,4) cxcywh, obj_scores (N,), class_ids (N,).
     """
     pred = output[0] if output.ndim == 3 else output  # (84, N)
-    pred = pred.T                                       # (N, 84)
+    pred = pred.T  # (N, 84)
 
     boxes_cxcywh = pred[:, :4]
-    class_scores = pred[:, 4:]                          # (N, 80)
+    class_scores = pred[:, 4:]  # (N, 80)
 
-    class_ids = class_scores.argmax(axis=1)             # (N,)
-    obj_scores = class_scores.max(axis=1)               # (N,)
+    class_ids = class_scores.argmax(axis=1)  # (N,)
+    obj_scores = class_scores.max(axis=1)  # (N,)
     return boxes_cxcywh, obj_scores, class_ids
 
 
@@ -59,11 +61,11 @@ def _decode_yolov5(output: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarr
     Decode YOLOv5 tensor: shape (1, 25200, 85) or (25200, 85).
     Returns boxes (N,4) cxcywh, obj_scores (N,), class_ids (N,).
     """
-    pred = output[0] if output.ndim == 3 else output    # (25200, 85)
+    pred = output[0] if output.ndim == 3 else output  # (25200, 85)
 
     boxes_cxcywh = pred[:, :4]
     obj_conf = pred[:, 4]
-    class_scores = pred[:, 5:]                           # (N, 80)
+    class_scores = pred[:, 5:]  # (N, 80)
     class_ids = class_scores.argmax(axis=1)
     obj_scores = obj_conf * class_scores.max(axis=1)
     return boxes_cxcywh, obj_scores, class_ids
@@ -155,8 +157,10 @@ def postprocess(
         conf = float(scores[idx])
 
         bx1, by1, bx2, by2 = (
-            float(boxes_xyxy[idx, 0]), float(boxes_xyxy[idx, 1]),
-            float(boxes_xyxy[idx, 2]), float(boxes_xyxy[idx, 3]),
+            float(boxes_xyxy[idx, 0]),
+            float(boxes_xyxy[idx, 1]),
+            float(boxes_xyxy[idx, 2]),
+            float(boxes_xyxy[idx, 3]),
         )
 
         # Map back to original image coordinates
@@ -171,11 +175,16 @@ def postprocess(
             if min(w, h) < min_box_side_px:
                 continue
 
-        detections.append(Detection(
-            label=label,
-            class_id=cid,
-            confidence=round(conf, 4),
-            x1=ox1, y1=oy1, x2=ox2, y2=oy2,
-        ))
+        detections.append(
+            Detection(
+                label=label,
+                class_id=cid,
+                confidence=round(conf, 4),
+                x1=ox1,
+                y1=oy1,
+                x2=ox2,
+                y2=oy2,
+            )
+        )
 
     return detections

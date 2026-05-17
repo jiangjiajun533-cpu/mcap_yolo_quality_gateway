@@ -1,6 +1,7 @@
 """
 Background worker: runs quality scan or YOLO inference in a thread.
 """
+
 from __future__ import annotations
 
 import threading
@@ -144,6 +145,7 @@ def _run_yolo_infer(job: Job) -> None:
     stats = stats_out[0] if stats_out else PipelineStats()
 
     from app.report.json_report import _aggregate_latencies
+
     perf = {
         "wall_time_sec": round(wall_sec, 3),
         "processed_frames_per_sec": (

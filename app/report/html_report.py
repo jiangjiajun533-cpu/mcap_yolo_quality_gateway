@@ -3,6 +3,7 @@ Simplified HTML reports (FR-REPORT-002, FR-REPORT-003).
 
 Single-page tables + sample thumbnails. No external chart libraries.
 """
+
 from __future__ import annotations
 
 import json
@@ -132,8 +133,11 @@ _CAM_GALLERY_TPL = """
 {% endif %}
 """
 
-_QUALITY_TPL = """<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>Quality Report</title>""" + _CSS + """</head><body>
+_QUALITY_TPL = (
+    """<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>Quality Report</title>"""
+    + _CSS
+    + """</head><body>
 <div class="page">
 <a class="back" href="/">← Back to Dashboard</a>
 <h1>Quality Report</h1>
@@ -229,9 +233,13 @@ _QUALITY_TPL = """<!DOCTYPE html>
 
 </div>
 </body></html>"""
+)
 
-_YOLO_TPL = """<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>YOLO Report</title>""" + _CSS + """</head><body>
+_YOLO_TPL = (
+    """<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>YOLO Report</title>"""
+    + _CSS
+    + """</head><body>
 <div class="page">
 <a class="back" href="/">← Back to Dashboard</a>
 <h1>YOLO Detection Report</h1>
@@ -303,6 +311,7 @@ _YOLO_TPL = """<!DOCTYPE html>
 
 </div>
 </body></html>"""
+)
 
 
 def _topic_short(topic: str) -> str:
@@ -336,12 +345,23 @@ def _gallery_title(shown: int, exported_total: int) -> str:
 
 
 _CAMERA_ORDER = [
-    "Head RGB", "Head Depth", "Up RGB", "Up Depth", "Left Wrist", "Right Wrist",
+    "Head RGB",
+    "Head Depth",
+    "Up RGB",
+    "Up Depth",
+    "Left Wrist",
+    "Right Wrist",
 ]
 
 
 def _empty_gallery() -> dict:
-    return {"thumbnails": [], "shown": 0, "exported_total": 0, "title": "", "by_topic": []}
+    return {
+        "thumbnails": [],
+        "shown": 0,
+        "exported_total": 0,
+        "title": "",
+        "by_topic": [],
+    }
 
 
 def _sample_caption(entry: dict, *, is_bad: bool) -> str:
@@ -359,7 +379,9 @@ def _sample_caption(entry: dict, *, is_bad: bool) -> str:
         if tags:
             parts.append(", ".join(str(t) for t in tags))
     else:
-        labels = [o.get("label", "") for o in (entry.get("objects") or []) if o.get("label")]
+        labels = [
+            o.get("label", "") for o in (entry.get("objects") or []) if o.get("label")
+        ]
         if labels:
             parts.append(" ".join(labels[:4]))
     return " · ".join(parts)
@@ -491,7 +513,7 @@ def _load_report_subtitle(
             parts.append(f"processed span {pd}s")
     mp = output_dir / "metrics.json"
     if mp.exists():
-        mi = (json.loads(mp.read_text(encoding="utf-8")).get("model") or {})
+        mi = json.loads(mp.read_text(encoding="utf-8")).get("model") or {}
         dev = mi.get("device")
         backend = mi.get("backend")
         if dev or backend:
@@ -570,9 +592,7 @@ def _load_det_samples(
     *,
     full: bool = False,
 ) -> dict:
-    return _load_sample_gallery(
-        output_dir, "detection_samples", limit=limit, full=full
-    )
+    return _load_sample_gallery(output_dir, "detection_samples", limit=limit, full=full)
 
 
 def _generate_quality_conclusion(topics: List[dict]) -> str:
@@ -580,7 +600,9 @@ def _generate_quality_conclusion(topics: List[dict]) -> str:
     total_processed = sum(d.get("processed_frames", 0) for d in topics)
     total_bad = sum(d.get("bad_quality_frames", 0) for d in topics)
     bad_ratio = total_bad / total_processed if total_processed else 0
-    avg_scores = [d.get("avg_quality_score", 0) for d in topics if d.get("avg_quality_score")]
+    avg_scores = [
+        d.get("avg_quality_score", 0) for d in topics if d.get("avg_quality_score")
+    ]
     overall_avg = sum(avg_scores) / len(avg_scores) if avg_scores else 0
 
     all_issues: Dict[str, int] = {}
@@ -590,29 +612,52 @@ def _generate_quality_conclusion(topics: List[dict]) -> str:
     top_issues = sorted(all_issues.items(), key=lambda x: -x[1])[:3]
 
     parts = []
-    parts.append(f"共分析 <b>{len(topics)}</b> 个摄像机 Topic，合计处理 <b>{total_processed}</b> 帧。")
+    parts.append(
+        f"共分析 <b>{len(topics)}</b> 个摄像机 Topic，合计处理 <b>{total_processed}</b> 帧。"
+    )
     if bad_ratio < 0.05:
-        parts.append(f"整体图像质量<b>优秀</b>——仅 {bad_ratio:.1%} 的帧被标记为低质量（平均质量分 {overall_avg:.3f}）。")
+        parts.append(
+            f"整体图像质量<b>优秀</b>——仅 {bad_ratio:.1%} 的帧被标记为低质量（平均质量分 {overall_avg:.3f}）。"
+        )
     elif bad_ratio < 0.15:
-        parts.append(f"整体图像质量<b>良好</b>——{bad_ratio:.1%} 的帧被标记为低质量（平均质量分 {overall_avg:.3f}）。")
+        parts.append(
+            f"整体图像质量<b>良好</b>——{bad_ratio:.1%} 的帧被标记为低质量（平均质量分 {overall_avg:.3f}）。"
+        )
     elif bad_ratio < 0.30:
-        parts.append(f"整体图像质量<b>中等</b>——{bad_ratio:.1%} 的帧被标记为低质量（平均质量分 {overall_avg:.3f}），建议进一步排查。")
+        parts.append(
+            f"整体图像质量<b>中等</b>——{bad_ratio:.1%} 的帧被标记为低质量（平均质量分 {overall_avg:.3f}），建议进一步排查。"
+        )
     else:
-        parts.append(f"整体图像质量<b>较差</b>——{bad_ratio:.1%} 的帧被标记为低质量（平均质量分 {overall_avg:.3f}），需立即关注数据采集条件。")
+        parts.append(
+            f"整体图像质量<b>较差</b>——{bad_ratio:.1%} 的帧被标记为低质量（平均质量分 {overall_avg:.3f}），需立即关注数据采集条件。"
+        )
 
     if top_issues:
         issue_str = "、".join(f"{k}（{v} 帧）" for k, v in top_issues)
         parts.append(f"主要质量问题：{issue_str}。")
 
-    worst_topic = max(topics, key=lambda d: d.get("bad_quality_ratio", 0)) if topics else None
+    worst_topic = (
+        max(topics, key=lambda d: d.get("bad_quality_ratio", 0)) if topics else None
+    )
     if worst_topic and worst_topic.get("bad_quality_ratio", 0) > 0.1:
         cam = worst_topic.get("short", worst_topic.get("topic", ""))
-        parts.append(f"质量最差摄像机：<code>{cam}</code>（{worst_topic['bad_quality_ratio']:.1%} 帧低质量）。")
+        parts.append(
+            f"质量最差摄像机：<code>{cam}</code>（{worst_topic['bad_quality_ratio']:.1%} 帧低质量）。"
+        )
 
     return "".join(f"<p style='margin:4px 0'>{p}</p>" for p in parts)
 
 
-_TREND_COLORS = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#34495e"]
+_TREND_COLORS = [
+    "#e74c3c",
+    "#3498db",
+    "#2ecc71",
+    "#f39c12",
+    "#9b59b6",
+    "#1abc9c",
+    "#e67e22",
+    "#34495e",
+]
 
 
 def _generate_quality_trend_svg(output_dir: Path) -> str:
@@ -621,7 +666,11 @@ def _generate_quality_trend_svg(output_dir: Path) -> str:
     if not pred_path.exists():
         return ""
     data = json.loads(pred_path.read_text(encoding="utf-8"))
-    preds = data.get("predictions") or data if isinstance(data, list) else data.get("predictions", [])
+    preds = (
+        data.get("predictions") or data
+        if isinstance(data, list)
+        else data.get("predictions", [])
+    )
     if not preds:
         return ""
 
@@ -728,7 +777,9 @@ def _generate_quality_trend_svg(output_dir: Path) -> str:
     lx = PAD_L
     for i, topic_short in enumerate(sorted(by_topic.keys())):
         color = _TREND_COLORS[i % len(_TREND_COLORS)]
-        lines.append(f'<rect x="{lx}" y="{legend_y - 9}" width="14" height="3" fill="{color}" rx="1"/>')
+        lines.append(
+            f'<rect x="{lx}" y="{legend_y - 9}" width="14" height="3" fill="{color}" rx="1"/>'
+        )
         lines.append(
             f'<text x="{lx + 18}" y="{legend_y}" fill="#1f2328" font-size="10">{topic_short}</text>'
         )
@@ -742,7 +793,7 @@ def _generate_quality_trend_svg(output_dir: Path) -> str:
     lines.append(
         f'<text x="14" y="{PAD_T + chart_h / 2:.1f}" text-anchor="middle" fill="#1f2328" '
         f'font-size="11" font-weight="600" transform="rotate(-90,14,{PAD_T + chart_h / 2:.1f})">'
-        f'质量分</text>'
+        f"质量分</text>"
     )
     lines.append("</svg>")
     return "\n".join(lines)
@@ -784,7 +835,9 @@ def write_quality_html(
         d["short"] = _topic_short(d.get("topic", ""))
         ss = seq_map.get(d.get("topic", ""))
         d["duration_sec"] = f"{ss.duration_sec:.1f}s" if ss else None
-        d["estimated_fps"] = f"{ss.estimated_fps:.1f}" if ss and ss.estimated_fps else None
+        d["estimated_fps"] = (
+            f"{ss.estimated_fps:.1f}" if ss and ss.estimated_fps else None
+        )
         if ss:
             d["resolution_change_count"] = ss.resolution_change_count
             d["timestamp_jump_count"] = ss.timestamp_jump_count
@@ -810,11 +863,14 @@ def write_quality_html(
     if dup_results:
         for topic, groups in dup_results.items():
             for g in groups:
-                dup_groups.append({
-                    "topic_short": _topic_short(topic),
-                    "start": g.start_frame_seq, "end": g.end_frame_seq,
-                    "dur": round(g.duration_sec, 2),
-                })
+                dup_groups.append(
+                    {
+                        "topic_short": _topic_short(topic),
+                        "start": g.start_frame_seq,
+                        "end": g.end_frame_seq,
+                        "dur": round(g.duration_sec, 2),
+                    }
+                )
 
     issue_counts: Dict[str, int] = {}
     for d in topics:
@@ -895,13 +951,22 @@ def write_yolo_html(
     if perf:
         avg = perf.get("avg_latency_ms") or {}
         p95 = perf.get("p95_latency_ms") or {}
-        for stage in ("decode", "quality", "preprocess", "inference", "postprocess", "total"):
+        for stage in (
+            "decode",
+            "quality",
+            "preprocess",
+            "inference",
+            "postprocess",
+            "total",
+        ):
             if stage in avg:
-                perf_rows.append({
-                    "stage": stage,
-                    "avg": avg[stage],
-                    "p95": p95.get(stage, "—"),
-                })
+                perf_rows.append(
+                    {
+                        "stage": stage,
+                        "avg": avg[stage],
+                        "p95": p95.get(stage, "—"),
+                    }
+                )
 
     det_gallery = _load_det_samples(output_dir, full=True)
     model_info_dict = model_info or {}
@@ -933,10 +998,12 @@ def write_yolo_html(
                     all_classes_set.add(lbl)
         per_topic_classes = sorted(all_classes_set)
         for t_short, cc in sorted(topic_class_counts.items()):
-            per_topic.append({
-                "topic_short": t_short,
-                "counts": [cc.get(c, 0) for c in per_topic_classes],
-            })
+            per_topic.append(
+                {
+                    "topic_short": t_short,
+                    "counts": [cc.get(c, 0) for c in per_topic_classes],
+                }
+            )
 
     # Quality-confidence buckets
     qc_summary: List[dict] = []
@@ -954,16 +1021,25 @@ def write_yolo_html(
                 buckets["0.8–1.0"].append(r)
         for bname, recs in buckets.items():
             if not recs:
-                qc_summary.append({"bucket": bname, "frames": 0, "avg_obj": "—", "avg_conf": "—"})
+                qc_summary.append(
+                    {"bucket": bname, "frames": 0, "avg_obj": "—", "avg_conf": "—"}
+                )
                 continue
             n_obj = [len(r.objects) for r in recs]
-            confs = [o.confidence for r in recs for o in r.objects if hasattr(o, "confidence")]
-            qc_summary.append({
-                "bucket": bname,
-                "frames": len(recs),
-                "avg_obj": round(sum(n_obj) / len(n_obj), 2),
-                "avg_conf": round(sum(confs) / len(confs), 3) if confs else "—",
-            })
+            confs = [
+                o.confidence
+                for r in recs
+                for o in r.objects
+                if hasattr(o, "confidence")
+            ]
+            qc_summary.append(
+                {
+                    "bucket": bname,
+                    "frames": len(recs),
+                    "avg_obj": round(sum(n_obj) / len(n_obj), 2),
+                    "avg_conf": round(sum(confs) / len(confs), 3) if confs else "—",
+                }
+            )
 
     avg_infer_ms = "—"
     p95_infer_ms = "—"
@@ -990,8 +1066,10 @@ def write_yolo_html(
     yolo_conclusion = ""
     if sampled > 0 or inferred > 0:
         _backend_label = backend if backend else "onnxruntime"
-        _device_label = "GPU（TensorRT）" if "tensorrt" in _backend_label.lower() else (
-            "GPU（CUDA）" if (device or "").lower() == "gpu" else "CPU"
+        _device_label = (
+            "GPU（TensorRT）"
+            if "tensorrt" in _backend_label.lower()
+            else ("GPU（CUDA）" if (device or "").lower() == "gpu" else "CPU")
         )
         parts_zh = []
         parts_zh.append(
@@ -1008,7 +1086,8 @@ def write_yolo_html(
             total_det = sum(t.get("detected_count", 0) for t in targets)
             top_cls = sorted(targets, key=lambda t: -t.get("detected_count", 0))[:3]
             cls_str = "、".join(
-                f"{t.get('label','')}（{t.get('detected_count',0)} 次）" for t in top_cls
+                f"{t.get('label','')}（{t.get('detected_count',0)} 次）"
+                for t in top_cls
             )
             parts_zh.append(
                 f"<p style='margin:4px 0'>累计检测目标 <b>{total_det}</b> 个，Top 类别：{cls_str}。</p>"
@@ -1019,7 +1098,9 @@ def write_yolo_html(
                 f"请检查模型兼容性。</p>"
             )
         else:
-            parts_zh.append("<p style='margin:4px 0'>所有已推理帧均成功完成，未出现推理错误。</p>")
+            parts_zh.append(
+                "<p style='margin:4px 0'>所有已推理帧均成功完成，未出现推理错误。</p>"
+            )
         yolo_conclusion = "".join(parts_zh)
 
     html = _ENV.from_string(_YOLO_TPL).render(
@@ -1088,7 +1169,9 @@ def regenerate_html_reports(output_dir: Path) -> None:
         stats = PipelineStats()
         metrics_path = output_dir / "metrics.json"
         if metrics_path.exists():
-            stats = _stats_from_metrics(json.loads(metrics_path.read_text(encoding="utf-8")))
+            stats = _stats_from_metrics(
+                json.loads(metrics_path.read_text(encoding="utf-8"))
+            )
         seq_summaries: Optional[List[SequenceSummary]] = None
         raw_seq = qr.get("sequence_analysis") or []
         if raw_seq:
@@ -1098,13 +1181,18 @@ def regenerate_html_reports(output_dir: Path) -> None:
                 ss.duration_sec = sd.get("duration_sec", 0.0)
                 ss.estimated_fps = sd.get("estimated_fps", 0.0)
                 ss.total_frames = sd.get("total_frames", 0)
-                ss.resolution_change_count = int(sd.get("resolution_change_count", 0) or 0)
+                ss.resolution_change_count = int(
+                    sd.get("resolution_change_count", 0) or 0
+                )
                 ss.timestamp_jump_count = int(sd.get("timestamp_jump_count", 0) or 0)
                 seq_summaries.append(ss)
         bf = qr.get("batch_failures") or []
         write_quality_html(
-            output_dir, topics, sequence_summaries=seq_summaries,
-            pipeline_stats=stats, batch_failures=bf,
+            output_dir,
+            topics,
+            sequence_summaries=seq_summaries,
+            pipeline_stats=stats,
+            batch_failures=bf,
         )
 
     metrics_path = output_dir / "metrics.json"
@@ -1113,7 +1201,10 @@ def regenerate_html_reports(output_dir: Path) -> None:
         stats = _stats_from_metrics(m)
         perf = m.get("performance") or {}
         model_info = m.get("model") or {
-            "name": "yolov8n", "format": "onnx", "input_size": [640, 640], "backend": "onnxruntime",
+            "name": "yolov8n",
+            "format": "onnx",
+            "input_size": [640, 640],
+            "backend": "onnxruntime",
         }
         targets = m.get("target_analysis") or []
         write_yolo_html(

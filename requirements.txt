@@ -28,3 +28,6 @@ httpx>=0.27.0
 
 # Optional: model download helper
 requests>=2.31.0
+
+# ONNX export (not required for inference): pip install -r requirements-export.txt
+# ultralytics is intentionally omitted here to keep Docker/runtime lean.

@@ -5,6 +5,7 @@ POST /mcap/inspect       — parse MCAP metadata
 POST /mcap/quality_scan  — launch async quality scan job
 POST /mcap/yolo_infer    — launch async YOLO inference job
 """
+
 from __future__ import annotations
 
 import shutil
@@ -41,8 +42,10 @@ async def upload_mcap(file: UploadFile = File(...)):
 
 # ── FR-API-003: /mcap/inspect ─────────────────────────────────────────────
 
+
 class InspectRequest(BaseModel):
     mcap_path: str
+
 
 @router.post("/inspect")
 def mcap_inspect(req: InspectRequest):
@@ -71,22 +74,32 @@ def mcap_inspect(req: InspectRequest):
 
 # ── FR-API-004: /mcap/quality_scan ────────────────────────────────────────
 
+
 class QualityScanRequest(BaseModel):
     mcap_path: str
     topics: Optional[List[str]] = None
     sample_every_n: int = Field(default=1, ge=1)
     target_fps: float = Field(default=0.0, ge=0.0)
-    start_sec: float = Field(default=0.0, ge=0.0, description="Relative start sec from MCAP beginning (FR-MCAP-003)")
-    end_sec: float = Field(default=0.0, ge=0.0, description="Relative end sec; 0 = no upper limit")
+    start_sec: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Relative start sec from MCAP beginning (FR-MCAP-003)",
+    )
+    end_sec: float = Field(
+        default=0.0, ge=0.0, description="Relative end sec; 0 = no upper limit"
+    )
     quality_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
     max_frames: int = Field(default=0, ge=0)
     output_dir: Optional[str] = None
+
 
 @router.post("/quality_scan")
 def mcap_quality_scan(req: QualityScanRequest):
     p = resolve_mcap_path(req.mcap_path)
     if not p.is_file():
-        raise HTTPException(status_code=404, detail=f"MCAP file not found: {req.mcap_path}")
+        raise HTTPException(
+            status_code=404, detail=f"MCAP file not found: {req.mcap_path}"
+        )
 
     job = job_manager.create("quality_scan", params=req.model_dump())
     if req.output_dir is None:
@@ -98,6 +111,7 @@ def mcap_quality_scan(req: QualityScanRequest):
 
 # ── FR-API-005: /mcap/yolo_infer ──────────────────────────────────────────
 
+
 class YoloInferRequest(BaseModel):
     mcap_path: str
     topics: Optional[List[str]] = None
@@ -106,22 +120,33 @@ class YoloInferRequest(BaseModel):
     target_classes: Optional[List[str]] = None
     sample_every_n: int = Field(default=1, ge=1)
     target_fps: float = Field(default=0.0, ge=0.0)
-    start_sec: float = Field(default=0.0, ge=0.0, description="Relative start sec from MCAP beginning (FR-MCAP-003)")
-    end_sec: float = Field(default=0.0, ge=0.0, description="Relative end sec; 0 = no upper limit")
+    start_sec: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Relative start sec from MCAP beginning (FR-MCAP-003)",
+    )
+    end_sec: float = Field(
+        default=0.0, ge=0.0, description="Relative end sec; 0 = no upper limit"
+    )
     quality_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
     conf_threshold: float = Field(default=settings.conf_threshold, ge=0.0, le=1.0)
     nms_threshold: float = Field(default=settings.nms_threshold, ge=0.0, le=1.0)
     min_box_side_px: int = Field(default=settings.min_box_side_px, ge=0)
-    skip_depth_topics_for_yolo: bool = Field(default=settings.skip_depth_topics_for_yolo)
+    skip_depth_topics_for_yolo: bool = Field(
+        default=settings.skip_depth_topics_for_yolo
+    )
     infer_low_quality: bool = False
     max_frames: int = Field(default=0, ge=0)
     output_dir: Optional[str] = None
+
 
 @router.post("/yolo_infer")
 def mcap_yolo_infer(req: YoloInferRequest):
     p = resolve_mcap_path(req.mcap_path)
     if not p.is_file():
-        raise HTTPException(status_code=404, detail=f"MCAP file not found: {req.mcap_path}")
+        raise HTTPException(
+            status_code=404, detail=f"MCAP file not found: {req.mcap_path}"
+        )
 
     job = job_manager.create("yolo_infer", params=req.model_dump())
     if req.output_dir is None:

@@ -1,4 +1,5 @@
 """Centralized configuration using pydantic-settings."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,27 +18,47 @@ class Settings(BaseSettings):
     )
 
     # --- Paths ---
-    workspace_dir: Path = Field(default=Path("/workspace"), description="Container workspace root")
-    output_dir: Path = Field(default=Path("outputs"), description="Default output directory")
-    models_dir: Path = Field(default=Path("models"), description="Directory for model files")
-    test_data_dir: Path = Field(default=Path("test_data"), description="Directory for test MCAP files")
+    workspace_dir: Path = Field(
+        default=Path("/workspace"), description="Container workspace root"
+    )
+    output_dir: Path = Field(
+        default=Path("outputs"), description="Default output directory"
+    )
+    models_dir: Path = Field(
+        default=Path("models"), description="Directory for model files"
+    )
+    test_data_dir: Path = Field(
+        default=Path("test_data"), description="Directory for test MCAP files"
+    )
 
     # --- MCAP reading ---
     auto_detect_topics: bool = Field(default=True)
     sample_every_n: int = Field(default=1, ge=1)
-    target_fps: float = Field(default=0.0, ge=0.0, description="0 means disabled, use sample_every_n instead")
+    target_fps: float = Field(
+        default=0.0, ge=0.0, description="0 means disabled, use sample_every_n instead"
+    )
     start_sec: float = Field(default=0.0, ge=0.0)
     end_sec: float = Field(default=0.0, ge=0.0, description="0 means no limit")
     max_frames: int = Field(default=0, ge=0, description="0 means no limit")
 
     # --- Quality thresholds ---
     quality_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
-    blur_threshold: float = Field(default=100.0, description="Laplacian variance below this = blurry")
-    brightness_low: float = Field(default=30.0, description="Mean brightness below this = too dark")
-    brightness_high: float = Field(default=225.0, description="Mean brightness above this = too bright")
-    contrast_threshold: float = Field(default=20.0, description="Std dev below this = low contrast")
+    blur_threshold: float = Field(
+        default=100.0, description="Laplacian variance below this = blurry"
+    )
+    brightness_low: float = Field(
+        default=30.0, description="Mean brightness below this = too dark"
+    )
+    brightness_high: float = Field(
+        default=225.0, description="Mean brightness above this = too bright"
+    )
+    contrast_threshold: float = Field(
+        default=20.0, description="Std dev below this = low contrast"
+    )
     min_width: int = Field(default=64, description="Width below this = low resolution")
-    min_height: int = Field(default=64, description="Height below this = low resolution")
+    min_height: int = Field(
+        default=64, description="Height below this = low resolution"
+    )
 
     # --- Quality penalty weights ---
     blur_penalty_max: float = Field(default=0.35)
@@ -75,8 +96,16 @@ class Settings(BaseSettings):
     infer_low_quality: bool = Field(default=False)
     target_classes: List[str] = Field(
         default=[
-            "person", "bicycle", "car", "motorcycle",
-            "bus", "truck", "traffic light", "stop sign", "dog", "cat",
+            "person",
+            "bicycle",
+            "car",
+            "motorcycle",
+            "bus",
+            "truck",
+            "traffic light",
+            "stop sign",
+            "dog",
+            "cat",
         ]
     )
 
@@ -84,12 +113,15 @@ class Settings(BaseSettings):
     max_bad_samples: int = Field(default=200, ge=0)
     max_detection_samples: int = Field(default=200, ge=0)
     html_gallery_preview_limit: int = Field(
-        default=40, ge=0,
+        default=40,
+        ge=0,
         description="Max thumbnails embedded in HTML reports (full set remains in outputs/)",
     )
 
     # --- Sequence analysis ---
-    frame_gap_threshold_ms: float = Field(default=200.0, description="Gap above this triggers FRAME_TIME_GAP warning")
+    frame_gap_threshold_ms: float = Field(
+        default=200.0, description="Gap above this triggers FRAME_TIME_GAP warning"
+    )
     timestamp_jump_threshold_ms: float = Field(default=500.0)
 
     # --- API ---

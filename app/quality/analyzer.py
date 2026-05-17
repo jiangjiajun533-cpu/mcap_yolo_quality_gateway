@@ -2,6 +2,7 @@
 Per-frame quality analyzer: integrates metrics + scoring + gate control
 (FR-QUALITY-001, FR-QUALITY-002, FR-YOLO-007).
 """
+
 from __future__ import annotations
 
 import time
@@ -19,13 +20,19 @@ from app.quality.scoring import QualityResult, compute_quality_score
 logger = get_logger("quality.analyzer")
 
 
-def analyze_frame(frame: FrameRecord, quality_threshold: Optional[float] = None) -> QualityResult:
+def analyze_frame(
+    frame: FrameRecord, quality_threshold: Optional[float] = None
+) -> QualityResult:
     """
     Run quality analysis on a decoded FrameRecord.
     Returns a QualityResult with score, tags, penalties, and pass/fail flag.
     """
     t0 = time.perf_counter()
-    threshold = quality_threshold if quality_threshold is not None else settings.quality_threshold
+    threshold = (
+        quality_threshold
+        if quality_threshold is not None
+        else settings.quality_threshold
+    )
 
     img = frame.image
     is_corrupted = False
@@ -36,7 +43,9 @@ def analyze_frame(frame: FrameRecord, quality_threshold: Optional[float] = None)
             mcap_file=frame.mcap_file,
             topic=frame.topic,
             frame_seq=frame.frame_seq,
-            timestamp_ns=frame.ros_stamp_ns or frame.publish_time_ns or frame.log_time_ns,
+            timestamp_ns=frame.ros_stamp_ns
+            or frame.publish_time_ns
+            or frame.log_time_ns,
             log_time_ns=frame.log_time_ns,
             publish_time_ns=frame.publish_time_ns,
             ros_stamp_ns=frame.ros_stamp_ns,
@@ -55,14 +64,20 @@ def analyze_frame(frame: FrameRecord, quality_threshold: Optional[float] = None)
     try:
         metrics = compute_all_metrics(img, frame.width, frame.height)
     except Exception as exc:
-        logger.warning(f"Metrics computation failed for {frame.topic} seq={frame.frame_seq}: {exc}")
+        logger.warning(
+            f"Metrics computation failed for {frame.topic} seq={frame.frame_seq}: {exc}"
+        )
         is_corrupted = True
         metrics = {
-            "width": frame.width, "height": frame.height,
-            "brightness_mean": 0.0, "brightness_std": 0.0,
-            "blur_score": 0.0, "contrast_score": 0.0,
+            "width": frame.width,
+            "height": frame.height,
+            "brightness_mean": 0.0,
+            "brightness_std": 0.0,
+            "blur_score": 0.0,
+            "contrast_score": 0.0,
             "saturation_mean": 0.0,
-            "is_solid_color": False, "is_color_channel_anomaly": False,
+            "is_solid_color": False,
+            "is_color_channel_anomaly": False,
             "is_aspect_ratio_anomaly": False,
         }
 
@@ -84,7 +99,9 @@ def analyze_frame(frame: FrameRecord, quality_threshold: Optional[float] = None)
     result.mcap_file = frame.mcap_file
     result.topic = frame.topic
     result.frame_seq = frame.frame_seq
-    result.timestamp_ns = frame.ros_stamp_ns or frame.publish_time_ns or frame.log_time_ns
+    result.timestamp_ns = (
+        frame.ros_stamp_ns or frame.publish_time_ns or frame.log_time_ns
+    )
     result.log_time_ns = frame.log_time_ns
     result.publish_time_ns = frame.publish_time_ns
     result.ros_stamp_ns = frame.ros_stamp_ns
