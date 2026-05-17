@@ -17,6 +17,9 @@ def clean_path(raw: str) -> str:
     s = s.replace("\\", "/")
     if len(s) > 1 and s[1] == ":":
         return s
+    # Preserve POSIX absolute paths (/workspace/...); lstrip("./") would eat the leading slash.
+    if s.startswith("/"):
+        return s
     return s.lstrip("./")
 
 

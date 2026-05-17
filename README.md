@@ -85,11 +85,14 @@ python scripts/run_mcap_yolo_inference.py \
 ## 5. 安装依赖
 
 ```bash
+git clone https://github.com/jiangjiajun533-cpu/mcap_yolo_quality_gateway.git
 cd mcap_yolo_quality_gateway
 pip install -r requirements.txt
 ```
 
 Python 版本要求：3.10+
+
+> 大文件（`models/*.onnx`、`test_data/*.mcap`）不在 Git 中，见第 8、9 节准备。
 
 ## 6. Docker Compose 一键启动
 
@@ -107,8 +110,6 @@ docker compose --profile test up --build
 ```
 
 ### 6.1 Ubuntu 验收流程（推荐提交前执行）
-
-在 Ubuntu 上先释放 8088 端口，再跑单元测试 + Docker smoke，并校验报告 JSON 字段：
 
 ```bash
 cd mcap_yolo_quality_gateway
@@ -170,7 +171,7 @@ python scripts/generate_test_mcap.py --output test_data/synthetic.mcap --frames 
 ### 方式一：自动下载 + 导出
 
 ```bash
-pip install ultralytics   # 仅导出 ONNX 时需要
+pip install -r requirements-export.txt
 python scripts/download_yolo_model.py --output-dir models
 ```
 
