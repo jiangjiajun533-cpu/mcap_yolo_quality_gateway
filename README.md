@@ -146,8 +146,15 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ## 8. 生成测试 MCAP
 
+clone 后仓库内已有空目录 `test_data/`、`outputs/`（`.mcap` / 运行产物不入 Git）。请任选其一准备 `sample.mcap`：
+
+1. 将老师/官方提供的真实 MCAP 放入 `test_data/sample.mcap`；
+2. 或运行下方脚本生成合成数据，再复制为 `sample.mcap`（仅 smoke/自测）。
+
 ```bash
 python scripts/generate_test_mcap.py --output test_data/synthetic.mcap --frames 100 --fps 30
+cp test_data/synthetic.mcap test_data/sample.mcap   # Linux/macOS
+# copy test_data\synthetic.mcap test_data\sample.mcap   # Windows
 ```
 
 生成包含 100 帧合成 JPEG CompressedImage 的 MCAP 文件，用于 pipeline 验证。

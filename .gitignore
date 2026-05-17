@@ -40,7 +40,8 @@ models/*.engine
 test_data/*.mcap
 
 # ── Pipeline outputs (generated at runtime, not source code) ──
-outputs/
+outputs/*
+!outputs/.gitkeep
 
 # ── OS junk ──
 .DS_Store
