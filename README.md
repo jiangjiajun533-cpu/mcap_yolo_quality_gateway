@@ -205,6 +205,16 @@ model.export(format="onnx", imgsz=640, opset=12, simplify=True)
 
 将 `yolov8n.onnx` 放入 `models/` 目录。
 
+### 校验模型文件
+
+```bash
+ls -lh models/yolov8n.onnx models/coco_classes.txt
+# 或 Windows:
+# dir models\yolov8n.onnx models\coco_classes.txt
+```
+
+`yolov8n.onnx` 约 6MB，`coco_classes.txt` 包含 80 行类别名称。若模型缺失，CLI 和 API 启动时会报 `ModelNotFoundError` 并提示路径。
+
 ### Docker 中挂载
 
 模型目录通过 docker-compose.yml 中 `volumes: ./models:/workspace/models` 挂载。

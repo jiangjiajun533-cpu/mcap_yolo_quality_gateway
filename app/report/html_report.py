@@ -93,7 +93,7 @@ _CAM_GALLERY_TPL = """
       {{ section.topic_short }}<span class="cnt">({{ section.thumbnails | length }})</span>
     </button>
     {% endfor %}
-    </nav>
+</nav>
   </div>
   <div class="cam-panels">
   {% for section in gallery.by_topic %}
@@ -106,10 +106,10 @@ _CAM_GALLERY_TPL = """
       <div class="cap">{{ s.caption }}</div>
     </div>
     {% endfor %}
-    </div>
-  </section>
+</div>
+</section>
   {% endfor %}
-  </div>
+</div>
 </div>
 <script>
 (function () {
@@ -146,16 +146,16 @@ _QUALITY_TPL = (
 {% if batch_failures %}
 <h2>批量 MCAP 处理失败</h2>
 <p class="meta">目录模式下个别文件异常已跳过；其余文件结果已合并。</p>
-<table>
+  <table>
 <tr><th>MCAP 路径</th><th>原因</th></tr>
 {% for f in batch_failures %}
 <tr><td style="font-size:12px;word-break:break-all">{{ f.mcap_file }}</td><td class="bad" style="font-size:12px">{{ f.error }}</td></tr>
-{% endfor %}
-</table>
-{% endif %}
+    {% endfor %}
+  </table>
+  {% endif %}
 
 <h2>Per-topic summary</h2>
-<table>
+    <table>
 <tr><th>Topic</th><th>Duration</th><th>FPS</th><th>分辨率变化</th><th>时间戳跳变</th><th>Processed</th><th>Bad</th><th>Bad %</th><th>Avg score</th><th>Main issues</th></tr>
 {% for t in topics %}
 <tr>
@@ -170,8 +170,8 @@ _QUALITY_TPL = (
   <td>{{ t.avg_quality_score }}</td>
   <td>{% for k,v in (t.quality_issue_counts or {}).items() %}{{ k }}({{ v }}) {% endfor %}</td>
 </tr>
-{% endfor %}
-</table>
+      {% endfor %}
+    </table>
 
 {% if issue_chart %}
 <h2>Quality Issue Distribution</h2>
@@ -181,11 +181,11 @@ _QUALITY_TPL = (
   <span style="width:160px;font-size:13px;text-align:right;padding-right:10px;white-space:nowrap">{{ item.label }}</span>
   <div style="flex:1;background:#eee;border-radius:3px;height:22px;position:relative">
     <div style="width:{{ item.pct }}%;background:#e74c3c;height:100%;border-radius:3px;min-width:2px"></div>
-  </div>
+    </div>
   <span style="width:50px;font-size:13px;padding-left:8px">{{ item.count }}</span>
 </div>
 {% endfor %}
-</div>
+  </div>
 {% endif %}
 
 {% if worst %}
@@ -193,13 +193,13 @@ _QUALITY_TPL = (
 <table>
 <tr><th>#</th><th>Frame</th><th>Score</th><th>Tags</th></tr>
 {% for w in worst %}
-<tr>
-  <td>{{ loop.index }}</td>
+  <tr>
+    <td>{{ loop.index }}</td>
   <td>{{ w.frame_seq }}</td>
   <td class="bad">{{ w.quality_score }}</td>
   <td>{{ (w.quality_tags or []) | join(', ') }}</td>
-</tr>
-{% endfor %}
+  </tr>
+  {% endfor %}
 </table>
 {% endif %}
 
@@ -226,12 +226,12 @@ _QUALITY_TPL = (
 <tr><th>Topic</th><th>Start frame</th><th>End frame</th><th>Duration (s)</th></tr>
 {% for g in dup_groups %}
 <tr><td>{{ g.topic_short }}</td><td>{{ g.start }}</td><td>{{ g.end }}</td><td>{{ g.dur }}</td></tr>
-{% endfor %}
+      {% endfor %}
 </table>
-</div>
+    </div>
 {% endif %}
 
-</div>
+  </div>
 </body></html>"""
 )
 
@@ -268,9 +268,9 @@ _YOLO_TPL = (
   <td>{{ t.avg_confidence }}</td>
   <td>{{ t.avg_quality_score }}</td>
 </tr>
-    {% endfor %}
+  {% endfor %}
   </table>
-  {% endif %}
+{% endif %}
 
 {% if perf_rows %}
 <h2>Latency (ms)</h2>
