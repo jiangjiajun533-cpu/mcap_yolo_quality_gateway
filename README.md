@@ -30,25 +30,28 @@
 
 ## 3. MCAP 输入格式说明
 
-MCAP 是一种通用的机器人数据容器格式：ROS 2 的 `rosbag2` 可将 bag 存为 MCAP，ROS 1 数据也常经转换或工具直接以 `message_encoding=ros1` 写入 MCAP。**容器是 MCAP，不等于文件内一定是 ROS 2 CDR 序列化。**
+MCAP 是机器人/自动驾驶数据中常见的日志存储格式，可用于保存 ROS 图像消息、Topic、时间戳和 schema 信息。本项目基于 MCAP 读取 Topic/schema/时间戳等元数据，当前**默认解码路径**使用 `mcap` + `mcap-ros1-support`，主要支持 **ROS 1 serialization**（`message_encoding=ros1`）的 `sensor_msgs/Image` 与 `sensor_msgs/CompressedImage` 离线解析与质量评估；**不依赖完整 ROS 1/ROS 2 运行时**。
 
 **MCAP 读取方案选择：方案 B（`mcap` + ROS 消息解码）**
 
-- 使用 `mcap` 读取文件结构与 summary；使用 `mcap-ros1-support` 反序列化 **`message_encoding=ros1`** 的消息（见 `app/mcap_io/reader.py` 的 `DecoderFactory`）
-- **不依赖完整 ROS 1/ROS 2 运行时**，纯 Python 离线解析
-- 对 MCAP schema、channel、message 有更深入的控制
-- 安装依赖：`pip install mcap mcap-ros1-support`（已包含在 requirements.txt）
-- 随附 `test_data/sample.mcap` 中图像 Topic 均为 **ros1 编码** + `sensor_msgs/...` schema（非 `sensor_msgs/msg/...`）
+- `mcap`：读取 MCAP 文件结构、summary、按 Topic/时间过滤迭代消息
+- `mcap-ros1-support`：通过 `app/mcap_io/reader.py` 中的 `mcap_ros1.decoder.DecoderFactory` 反序列化 **ros1** 编码通道
+- 安装依赖：`pip install mcap mcap-ros1-support`（已包含在 `requirements.txt`）
+- 验收数据 `test_data/sample.mcap`：全部 channel 为 **`message_encoding=ros1`**，图像 schema 为 `sensor_msgs/CompressedImage` / `sensor_msgs/Image`（非 CDR）
 
-**ROS 1 / ROS 2 与本文档表述的对应关系：**
+**说明（schema 命名 vs 序列化解码，避免与 ROS 2 bag 混淆）：**
 
-| 层面 | 本项目现状 |
-|------|-----------|
-| MCAP 容器、Topic 列表、时间过滤 | 支持（`mcap`） |
-| MCAP 内 **ros1** 序列化的图像消息 | 支持（`mcap-ros1-support` → `ros_image_decoder`） |
-| Schema 名为 `sensor_msgs/msg/...`（ROS 2 命名）但 **encoding 仍为 ros1** | Topic 识别与解码路由兼容（与 `sensor_msgs/...` 同等处理） |
-| MCAP 内 **`message_encoding=cdr` / `ros2` 的纯 ROS 2 bag** | **当前未实现** CDR 反序列化；需先转为 ros1 编码 MCAP，或后续接入 `mcap-ros2-support` |
-| 图像 payload（JPEG、rgb8 等） | 与 ROS 发行版无关；在拿到 `CompressedImage` / `Image` 对象后由 OpenCV/NumPy 解码 |
+- **Schema 名称识别**：§4 所列 `sensor_msgs/msg/Image`、`sensor_msgs/msg/CompressedImage` 用于兼容常见 **ROS 2 风格 schema 命名**与 Topic 识别（见 `app/mcap_io/message_types.py`），与 `sensor_msgs/Image` 等等价路由。
+- **默认序列化解码**：仅当 MCAP channel 的 `message_encoding=ros1` 时，由 `mcap-ros1-support` 还原消息对象，再进入 `ros_image_decoder`。
+- **ROS 2 CDR**：若输入 MCAP 使用 **`message_encoding=cdr` / `ros2`**，需额外接入 ROS 2 CDR decoder（如 `mcap-ros2-support`）。本项目已具备 MCAP summary/Topic 识别能力，**完整 ROS 2 CDR 解码不作为当前默认验收路径**。
+
+| 能力 | 状态 |
+|------|------|
+| MCAP 容器、Topic 列表、时间范围过滤 | 支持 |
+| ros1 序列化的 `sensor_msgs` 图像消息 | 支持（默认路径） |
+| ROS 2 风格 schema 名 + **仍为 ros1** encoding | 支持识别与解码 |
+| ROS 2 **CDR** serialization | 未实现（非默认验收） |
+| 图像 payload（JPEG、rgb8 等） | 在消息反序列化后由 OpenCV/NumPy 处理，与 ROS 发行版无关 |
 
 **不支持的消息类型：**
 - 非图像 Topic（如 `/tf`、`/joint_states`、`/imu` 等）会被自动识别为非图像并跳过
