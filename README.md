@@ -30,14 +30,25 @@
 
 ## 3. MCAP 输入格式说明
 
-MCAP 是 ROS2 录制的标准存储格式。
+MCAP 是一种通用的机器人数据容器格式：ROS 2 的 `rosbag2` 可将 bag 存为 MCAP，ROS 1 数据也常经转换或工具直接以 `message_encoding=ros1` 写入 MCAP。**容器是 MCAP，不等于文件内一定是 ROS 2 CDR 序列化。**
 
 **MCAP 读取方案选择：方案 B（`mcap` + ROS 消息解码）**
 
-- 使用 `mcap` + `mcap-ros1-support` 库直接读取 MCAP 格式
-- **不依赖完整 ROS2 环境**，纯 Python 工程，适合离线解析
+- 使用 `mcap` 读取文件结构与 summary；使用 `mcap-ros1-support` 反序列化 **`message_encoding=ros1`** 的消息（见 `app/mcap_io/reader.py` 的 `DecoderFactory`）
+- **不依赖完整 ROS 1/ROS 2 运行时**，纯 Python 离线解析
 - 对 MCAP schema、channel、message 有更深入的控制
 - 安装依赖：`pip install mcap mcap-ros1-support`（已包含在 requirements.txt）
+- 随附 `test_data/sample.mcap` 中图像 Topic 均为 **ros1 编码** + `sensor_msgs/...` schema（非 `sensor_msgs/msg/...`）
+
+**ROS 1 / ROS 2 与本文档表述的对应关系：**
+
+| 层面 | 本项目现状 |
+|------|-----------|
+| MCAP 容器、Topic 列表、时间过滤 | 支持（`mcap`） |
+| MCAP 内 **ros1** 序列化的图像消息 | 支持（`mcap-ros1-support` → `ros_image_decoder`） |
+| Schema 名为 `sensor_msgs/msg/...`（ROS 2 命名）但 **encoding 仍为 ros1** | Topic 识别与解码路由兼容（与 `sensor_msgs/...` 同等处理） |
+| MCAP 内 **`message_encoding=cdr` / `ros2` 的纯 ROS 2 bag** | **当前未实现** CDR 反序列化；需先转为 ros1 编码 MCAP，或后续接入 `mcap-ros2-support` |
+| 图像 payload（JPEG、rgb8 等） | 与 ROS 发行版无关；在拿到 `CompressedImage` / `Image` 对象后由 OpenCV/NumPy 解码 |
 
 **不支持的消息类型：**
 - 非图像 Topic（如 `/tf`、`/joint_states`、`/imu` 等）会被自动识别为非图像并跳过
@@ -75,12 +86,24 @@ python scripts/run_mcap_yolo_inference.py \
 
 ## 4. 支持的 ROS 图像消息类型
 
-| 消息类型 | 支持编码 |
-|---------|---------|
-| `sensor_msgs/CompressedImage` / `sensor_msgs/msg/CompressedImage` | JPEG, PNG |
-| `sensor_msgs/Image` / `sensor_msgs/msg/Image` | rgb8, bgr8, mono8, rgba8, bgra8, yuv422, 16UC1, 32FC1 (depth) |
+**Schema 名称（用于 Topic 识别与解码分发）：**
+
+| Schema 名称 | 说明 |
+|------------|------|
+| `sensor_msgs/CompressedImage` | ROS 1 常见写法；`sample.mcap` 使用此形式 |
+| `sensor_msgs/msg/CompressedImage` | ROS 2 常见写法；代码中同样识别（见 `app/mcap_io/message_types.py`） |
+| `sensor_msgs/Image` / `sensor_msgs/msg/Image` | 原始图像，同上 |
+
+**图像 payload 编码（在消息已反序列化之后）：**
+
+| 消息 | 支持的 `format` / `encoding` |
+|------|------------------------------|
+| `CompressedImage` | JPEG, PNG |
+| `Image` | rgb8, bgr8, mono8, rgba8, bgra8, yuv422, 16UC1, 32FC1 (depth) |
 
 解析字段：`header.stamp`, `header.frame_id`, `format/encoding`, `data`
+
+**前提：** MCAP channel 的 `message_encoding` 须为 **ros1**（与 §3 一致）。仅 schema 名为 `sensor_msgs/msg/...` 而 encoding 为 `cdr` 的文件，当前无法从 MCAP 直接读出消息体。
 
 ## 5. 安装依赖
 
