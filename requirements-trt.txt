@@ -1,0 +1,10 @@
+# Optional: TensorRT backend (--backend tensorrt)
+# TensorRT wheels depend on CUDA version; install from NVIDIA docs for your platform.
+# Engine files (*.engine) are machine-specific — do NOT commit to Git.
+#
+# Example after installing TensorRT + CUDA:
+#   trtexec --onnx=models/yolov8n.onnx --saveEngine=models/yolov8n.engine --fp16
+#   python scripts/run_mcap_yolo_inference.py --backend tensorrt --model models/yolov8n.engine ...
+#
+# pycuda is often installed alongside TRT workflows:
+pycuda>=2024.1

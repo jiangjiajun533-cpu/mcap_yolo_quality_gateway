@@ -34,7 +34,7 @@ from app.mcap_io.message_types import McapSummary
 from app.quality.aggregator import TopicQualitySummary
 from app.quality.scoring import QualityResult
 from app.quality.sequence_analyzer import TopicSequenceTracker
-from app.yolo.onnx_runner import YoloOnnxRunner
+from app.yolo.runner_factory import create_runner
 from app.yolo.pipeline import PipelineStats, InferenceRecord, run_pipeline
 from app.yolo.target_analyzer import TargetAnalyzer
 from app.report.json_report import (
@@ -104,6 +104,13 @@ def _parse_args() -> argparse.Namespace:
         help="Min max-object confidence to export detection_samples",
     )
     p.add_argument("--input-size", type=int, default=640)
+    p.add_argument(
+        "--backend",
+        type=str,
+        default="onnxruntime",
+        choices=["onnxruntime", "tensorrt"],
+        help="Inference backend: onnxruntime (default) or tensorrt (.engine model)",
+    )
     p.add_argument("--device", type=str, default="cpu", choices=["cpu", "gpu"])
 
     p.add_argument("--quality-threshold", type=float, default=0.6)
@@ -160,9 +167,13 @@ def main() -> None:
         else None
     )
 
-    logger.info(f"Loading YOLO model: {args.model}")
-    runner = YoloOnnxRunner(
+    if args.backend == "tensorrt" and args.device == "cpu":
+        logger.warning("TensorRT backend always uses GPU; --device cpu is ignored")
+
+    logger.info(f"Loading YOLO model: {args.model} (backend={args.backend})")
+    runner = create_runner(
         model_path=args.model,
+        backend=args.backend,
         labels_path=args.labels,
         target_classes=target_classes,
         conf_threshold=args.conf_threshold,

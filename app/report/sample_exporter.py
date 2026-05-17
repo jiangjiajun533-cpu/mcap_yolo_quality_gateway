@@ -29,11 +29,20 @@ logger = get_logger("report.sample_exporter")
 
 
 def _topic_short(topic: str) -> str:
-    """'/camera/front/image/compressed' → 'front'."""
+    """Human-readable camera label (aligned with html_report._topic_short)."""
+    if "realsense_head" in topic:
+        return "head_depth" if "depth" in topic else "head_rgb"
+    if "realsense_up" in topic:
+        return "up_depth" if "depth" in topic else "up_rgb"
+    if "right_wrist" in topic:
+        return "right_wrist"
+    if "left_wrist" in topic:
+        return "left_wrist"
     parts = topic.strip("/").split("/")
-    if len(parts) >= 2:
+    # /camera/front/image/compressed → front
+    if len(parts) >= 2 and parts[0] == "camera":
         return parts[1]
-    return parts[0] if parts else "cam"
+    return parts[-2] if len(parts) >= 2 else (parts[0] if parts else "cam")
 
 
 def _safe_filename(name: str) -> str:

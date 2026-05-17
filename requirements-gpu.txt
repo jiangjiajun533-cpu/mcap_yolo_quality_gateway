@@ -1,0 +1,4 @@
+# Optional: GPU inference (--device gpu). Install AFTER CUDA 12.x + cuDNN 9 on host PATH.
+# Uninstall CPU wheel first: pip uninstall onnxruntime onnxruntime-gpu -y
+# Verify: python scripts/verify_gpu_env.py --model models/yolov8n.onnx
+onnxruntime-gpu>=1.26.0
