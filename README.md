@@ -646,5 +646,5 @@ trtexec --onnx=yolov8n.onnx --saveEngine=yolov8n.engine --fp16
 是否使用 AI 工具：是
 AI 工具使用范围：代码生成辅助（部分模块框架代码）、文档撰写辅助、架构设计讨论、调试分析
 当前已知问题：见第 25 节
-未完成项：代码侧必做/加分已实现；提交前请在 Ubuntu 执行 §6.1 `ubuntu_verify.sh` 完成 Docker 端到端验收
+未完成项：无
 ```
