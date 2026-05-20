@@ -334,6 +334,20 @@ def main() -> None:
         dup_results,
         batch_failures=batch_failures or None,
     )
+
+    # Export thumbnails before HTML — write_quality_html / write_yolo_html embed gallery from index.json
+    if sample_images:
+        export_bad_samples(
+            output_dir, all_records, sample_images, max_samples=args.max_bad_samples
+        )
+        export_detection_samples(
+            output_dir,
+            all_records,
+            sample_images,
+            max_samples=args.max_detection_samples,
+            min_confidence=args.detection_sample_min_conf,
+        )
+
     write_quality_html(
         output_dir,
         topic_summaries,
@@ -381,18 +395,6 @@ def main() -> None:
         wall_time_sec=wall_sec,
         batch_failures=batch_failures or None,
     )
-
-    if sample_images:
-        export_bad_samples(
-            output_dir, all_records, sample_images, max_samples=args.max_bad_samples
-        )
-        export_detection_samples(
-            output_dir,
-            all_records,
-            sample_images,
-            max_samples=args.max_detection_samples,
-            min_confidence=args.detection_sample_min_conf,
-        )
 
     if batch_failures:
         logger.warning(

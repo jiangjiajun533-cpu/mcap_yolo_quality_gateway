@@ -244,6 +244,12 @@ def main() -> None:
         dup_results,
         batch_failures=batch_failures or None,
     )
+
+    if sample_images:
+        export_bad_samples(
+            output_dir, all_records, sample_images, max_samples=args.max_bad_samples
+        )
+
     write_quality_html(
         output_dir,
         topic_summaries,
@@ -266,11 +272,6 @@ def main() -> None:
         wall_time_sec=wall_sec,
         batch_failures=batch_failures or None,
     )
-
-    if sample_images:
-        export_bad_samples(
-            output_dir, all_records, sample_images, max_samples=args.max_bad_samples
-        )
 
     if batch_failures:
         logger.warning(
